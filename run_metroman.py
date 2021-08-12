@@ -82,14 +82,14 @@ def retrieve_obs(reachlist, inputdir, DAll, AllObs):
         sosfile=inputdir.joinpath('sos', reach["sos"])
         sos_dataset=Dataset(sosfile)
 
-        print(reach["reach_id"])
+        #print(reach["reach_id"])
         
         sosreachids=sos_dataset["reaches/reach_id"][:]
         sosQbars=sos_dataset["reaches/mean_q"][:]
         k=np.argwhere(sosreachids == reach["reach_id"])
 
         Qbar[i]=sosQbars[k]
-        print(Qbar[i])
+        #print(Qbar[i])
 
         sos_dataset.close()
 
@@ -136,11 +136,15 @@ def process(DAll, AllObs, Exp, P, R, C):
     Obs=CalcdA(D,Obs)
     AllObs=CalcdA(DAll,AllObs)
     ShowFigs=False
-    DebugMode=False
+    DebugMode=True
+
+    Smin=1.7e-5
+    Obs.S[Obs.S<Smin]=putmask(Obs.S,Obs.S<Smin,Smin) #limit slopes to a minimum value
+    AllObs.S[AllObs.S<Smin]=putmask(AllObs.S,AllObs.S<Smin,Smin)
+
     P,jmp=ProcessPrior(P,AllObs,DAll,Obs,D,ShowFigs,Exp,R,DebugMode)
     Obs,P2=GetCovMats(D,Obs,Prior)
-    Obs.S[Obs.S<0]=putmask(Obs.S,Obs.S<0,0) #limit slopes to zero
-    AllObs.S[AllObs.S<0]=putmask(AllObs.S,AllObs.S<0,0)
+
     C=MetropolisCalculations(P,D,Obs,jmp,C,R,DAll,AllObs,Exp.nOpt,DebugMode)
     Estimate,C=CalculateEstimates(C,D,Obs,P,DAll,AllObs,Exp.nOpt) 
     return Estimate
@@ -201,10 +205,12 @@ def main():
     DAll, AllObs = get_domain_obs(len(reachlist))
 
     Qbar = retrieve_obs(reachlist, inputdir, DAll, AllObs)
-    # C, R, Exp, P = set_up_experiment(DAll, Qbar)
-    # Estimate = process(DAll, AllObs, Exp, P, R, C)
+    C, R, Exp, P = set_up_experiment(DAll, Qbar)
+    Estimate = process(DAll, AllObs, Exp, P, R, C)
+
+    #print(Estimate.AllQ)
     
-    # write_output(outputdir, reachids, Estimate)
+    #write_output(outputdir, reachlist, Estimate)
 
 if __name__ == "__main__":
    main()    
