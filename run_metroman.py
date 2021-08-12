@@ -79,16 +79,25 @@ def retrieve_obs(reachlist, inputdir, DAll, AllObs):
         AllObs.S[i,:]=swot_dataset["reach/slope2"][0:DAll.nt]
         swot_dataset.close()
 
-        # sosfile=inputdir.joinpath('sos', reach["sos"])
-        # sos_dataset=Dataset(sosfile)
-        # Qbar[i]=sos_dataset["reach/Qhat"][:]
-        # sos_dataset.close()
+        sosfile=inputdir.joinpath('sos', reach["sos"])
+        sos_dataset=Dataset(sosfile)
+
+        print(reach["reach_id"])
+        
+        sosreachids=sos_dataset["reaches/reach_id"][:]
+        sosQbars=sos_dataset["reaches/mean_q"][:]
+        k=np.argwhere(sosreachids == reach["reach_id"])
+
+        Qbar[i]=sosQbars[k]
+        print(Qbar[i])
+
+        sos_dataset.close()
 
         i += 1
 
-    print(AllObs.h)
-    print(AllObs.w)
-    print(AllObs.S)
+    #print(AllObs.h)
+    #print(AllObs.w)
+    #print(AllObs.S)
 
     # Reshape observations
     AllObs.hv=reshape(AllObs.h, (DAll.nR*DAll.nt,1))
@@ -180,15 +189,17 @@ def write_output(outputdir, reachids, Estimate):
 def main():
     # inputdir = Path("/mnt/data/input")
     # outputdir = Path("/mnt/data/output")
-    inputdir = Path("/home/nikki/Documents/confluence/workspace/flpe/data/input")
-    outputdir = Path("/home/nikki/Documents/confluence/workspace/flpe/data/output/metroman")
+    inputdir = Path("/Users/mtd/OneDrive - The Ohio State University/Analysis/SWOT/Discharge/Confluence/metroman_rundir")
+    outputdir = Path("/Users/mtd/OneDrive - The Ohio State University/Analysis/SWOT/Discharge/Confluence/metroman_outdir")
     try:
         reachjson = inputdir.joinpath(sys.argv[1])
     except IndexError:
         reachjson = inputdir.joinpath("sets.json") 
 
     reachlist = get_reachids(reachjson)
+
     DAll, AllObs = get_domain_obs(len(reachlist))
+
     Qbar = retrieve_obs(reachlist, inputdir, DAll, AllObs)
     # C, R, Exp, P = set_up_experiment(DAll, Qbar)
     # Estimate = process(DAll, AllObs, Exp, P, R, C)
