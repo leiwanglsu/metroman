@@ -37,8 +37,7 @@ def get_reachids(reachjson):
         List of reaches identifiers
     """
 
-    # index = int(os.environ.get("AWS_BATCH_JOB_ARRAY_INDEX"))
-    index = 7
+    index = int(os.environ.get("AWS_BATCH_JOB_ARRAY_INDEX"))
     with open(reachjson) as jsonfile:
         data = json.load(jsonfile)
     return data[index]
@@ -157,7 +156,7 @@ def process(DAll, AllObs, Exp, P, R, C):
     Estimate,C=CalculateEstimates(C,D,Obs,P,DAll,AllObs,Exp.nOpt) 
     return Estimate
 
-def write_output(outputdir, reachids, Estimate,iDelete,nDelete):
+def write_output(outputdir, reachids, Estimate, iDelete, nDelete, BadIS):
     """Write data from MetroMan run to NetCDF file in output directory."""
 
     fillvalue = -999999999999
@@ -172,7 +171,7 @@ def write_output(outputdir, reachids, Estimate,iDelete,nDelete):
     outfile = outputdir.joinpath(setid)
     dataset = Dataset(outfile, 'w', format="NETCDF4")
     dataset.set_id = setid    # TODO decide on how to identify sets
-    dataset.valid = 'X'    # TODO decide what's valid if applicable
+    dataset.valid =  1 if not BadIS else 0   # TODO decide what's valid if applicable
     dataset.createDimension("nr", len(reachids))
     dataset.createDimension("nt", len(Estimate.AllQ[0]))
     dataset.createDimension("u", 2)    # TODO what do the two uncertainty values represent?
@@ -206,10 +205,8 @@ def write_output(outputdir, reachids, Estimate,iDelete,nDelete):
     dataset.close()
 
 def main():
-    # inputdir = Path("/mnt/data/input")
-    # outputdir = Path("/mnt/data/output")
-    inputdir = Path("/Users/mtd/OneDrive - The Ohio State University/Analysis/SWOT/Discharge/Confluence/metroman_rundir")
-    outputdir = Path("/Users/mtd/OneDrive - The Ohio State University/Analysis/SWOT/Discharge/Confluence/metroman_outdir")
+    inputdir = Path("/mnt/data/input")
+    outputdir = Path("/mnt/data/output")
     try:
         reachjson = inputdir.joinpath(sys.argv[1])
     except IndexError:
@@ -222,8 +219,8 @@ def main():
     Qbar,iDelete,nDelete,BadIS = retrieve_obs(reachlist, inputdir, DAll, AllObs)
 
     if BadIS:
-        fillvalue=-9999
-	#define and write fill value data
+        fillvalue=-999999999999
+	    #define and write fill value data
         print("fewer than minimum number of swot passes. not running metroman for this set.")
         Estimate=Estimates(DAll,DAll)
         Estimate.nahat=np.full([DAll.nR],fillvalue)
@@ -234,7 +231,7 @@ def main():
     	Estimate = process(DAll, AllObs, Exp, P, R, C)
     
     reachids = [ str(e["reach_id"]) for e in reachlist ]
-    write_output(outputdir, reachids, Estimate,iDelete,nDelete)
+    write_output(outputdir, reachids, Estimate,iDelete,nDelete,BadIS)
 
 if __name__ == "__main__":
    main()    
