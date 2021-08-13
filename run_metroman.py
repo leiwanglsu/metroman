@@ -22,8 +22,6 @@ from metroman.MetropolisCalculations import MetropolisCalculations
 from metroman.ProcessPrior import ProcessPrior
 from metroman.SelObs import SelObs
 
-FILLVALUE = -999999999999
-
 def get_reachids(reachjson):
     """Extract and return a list of reach identifiers from json file.
     
@@ -162,7 +160,7 @@ def process(DAll, AllObs, Exp, P, R, C):
 def write_output(outputdir, reachids, Estimate,iDelete,nDelete):
     """Write data from MetroMan run to NetCDF file in output directory."""
 
-    fillvalue = -9999
+    fillvalue = -999999999999
 
     #add back in placeholders for removed data
     iInsert=iDelete-np.arange(nDelete)
