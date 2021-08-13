@@ -79,6 +79,7 @@ def CalculateEstimates(C,D,Obs,Prior,DAll,AllObs,nOpt):
     #4.1) uncertainty estimate of the dA term
     Obs.sigdAv=sqrt(diag(Obs.CdA))
     Obs.sigdA=Obs.sigdAv.reshape(D.nR,D.nt)
+
     
     #4.2) estimate correlation coefficient between A0 & na, A0 & x1, na & x1
     E.rho_A0na=empty([D.nR,1])
@@ -99,8 +100,12 @@ def CalculateEstimates(C,D,Obs,Prior,DAll,AllObs,nOpt):
     # E.QhatUnc_w=(2/3*Obs.sigw/Obs.w)**2
     E.QhatUnc_S=(1/2*Obs.sigS/Obs.S)**2
     E.QhatUnc_na=(E.stdnaPost/Prior.meanna)**2
+
+    E.QAllhatUnc_S=(1/2*AllObs.sigS/AllObs.S)**2
     
     A=(E.A0hat.reshape(D.nR,1)@ones([1,D.nt])+Obs.dA)
+    Aall=(E.A0hat.reshape(D.nR,1)@ones([1,DAll.nt])+AllObs.dA)
+
     sigx1=E.stdx1Post.reshape(D.nR,1)@ones([1,D.nt])
     sigA0=E.stdA0Post.reshape(D.nR,1)@ones([1,D.nt])
     signa=E.stdnaPost.reshape(D.nR,1)@ones([1,D.nt])
@@ -110,6 +115,10 @@ def CalculateEstimates(C,D,Obs,Prior,DAll,AllObs,nOpt):
     sigdA=Obs.sigdA
     na=Prior.meanna.reshape(D.nR,1)@ones([1,D.nt])
     x1=Prior.meanx1.reshape(D.nR,1)@ones([1,D.nt])
+
+    x1all=Prior.meanx1.reshape(D.nR,1)@ones([1,DAll.nt])
+    sigx1all=E.stdx1Post.reshape(DAll.nR,1)@ones([1,DAll.nt])
+    sigA0all=E.stdA0Post.reshape(DAll.nR,1)@ones([1,DAll.nt])
     
     if nOpt==3:
         E.QhatUnc_w=[]
@@ -136,15 +145,21 @@ def CalculateEstimates(C,D,Obs,Prior,DAll,AllObs,nOpt):
     elif nOpt==5:
         # this is based on Rodriguez et al. WRR 2020 and assumes a log-normal distribution of river depth
         cd=x1*(A/Obs.w)
+        cdAll=x1all*(Aall/AllObs.w)
         
         E.QhatUnc_w=( (5*x1**2*Obs.w)/(3*A**2 * ((x1*Obs.w/A)**2 + 1)) - 1/(3*Obs.w) )**2 * Obs.sigw**2
         E.QhatUnc_x1=(5/3*cd*Obs.w/A * (1+cd**2)**-1)**2 * sigx1**2
         E.QhatUnc_A0=(5/3/A*((1+cd**-2)**-1+1))**2 * sigA0**2
         E.QhatUnc_dA=(5/3/A*((1+cd**-2)**-1+1))**2 * sigdA**2
-        
+
+        E.QAllhatUnc_x1=(5/3*cdAll*AllObs.w/Aall * (1+cdAll**2)**-1)**2 * sigx1all**2
+        E.QAllhatUnc_w=( (5*x1all**2*AllObs.w)/(3*Aall**2 * ((x1all*AllObs.w/Aall)**2 + 1)) - 1/(3*AllObs.w) )**2 * AllObs.sigw**2
+        E.QAllhatUnc_A0=(5/3/Aall*((1+cdAll**-2)**-1+1))**2 * sigA0all**2
+
         E.QhatUnc_A0na=-2*rhoA0na*(5/3/A/na*((1+cd**-2)**-1 +1))*signa*sigA0
         E.QhatUnc_nax1=2*rhonax1*(5/3/na*cd*Obs.w/A * (1+cd**2)**-1)*signa*sigx1
         E.QhatUnc_A0x1=-2*rhoA0x1*(5/3/A*((1+cd**-2)**-1+1))*(5/3*cd*Obs.w/A * (1+cd**2)**-1)*sigA0*sigx1
+ 
         
         
     #4.4.2) estimate total Q uncertinty
@@ -156,7 +171,13 @@ def CalculateEstimates(C,D,Obs,Prior,DAll,AllObs,nOpt):
     E.QhatUnc_HatAll=sqrt( E.QhatUnc_na.reshape(D.nR,1)@ones([1,D.nt])+E.QhatUnc_x1+E.QhatUnc_w+ \
                            E.QhatUnc_A0+E.QhatUnc_dA+E.QhatUnc_S+ \
                            E.QhatUnc_A0na+E.QhatUnc_nax1+E.QhatUnc_A0x1)
-    
+
+    #4.4.3) estimate total Q uncertinty wrt time, for entire time domain
+    #          note - for now am omitting the cross-correlation terms - mike, august 2021
+    #                 also leaving out contribution of dA as it is not currently being calculated.
+    E.QhatUnc_HatAllAll=sqrt( E.QhatUnc_na.reshape(DAll.nR,1)@ones([1,DAll.nt])+E.QAllhatUnc_x1+E.QAllhatUnc_w+ \
+			   E.QAllhatUnc_A0 + E.QAllhatUnc_S)
+
     #4.4.3) discharge error budget
     E.QerrVarSum=empty([D.nR,6])
     E.QerrVarSum[:]=NaN

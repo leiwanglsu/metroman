@@ -5,3 +5,6 @@ __pycache__/
 *$py.class
 *.pyc
 metroman/__pycache__/
+*.pyc
+*.pyc
+metroman/__pycache__/CalculateEstimates.cpython-38.pyc

@@ -37,7 +37,8 @@ def get_reachids(reachjson):
         List of reaches identifiers
     """
 
-    index = int(os.environ.get("AWS_BATCH_JOB_ARRAY_INDEX"))
+    #index = int(os.environ.get("AWS_BATCH_JOB_ARRAY_INDEX"))
+    index=2
     with open(reachjson) as jsonfile:
         data = json.load(jsonfile)
     return data[index]
@@ -166,6 +167,7 @@ def write_output(outputdir, reachids, Estimate, iDelete, nDelete, BadIS):
     iInsert=reshape(iInsert,[nDelete,])
 
     Estimate.AllQ=np.insert(Estimate.AllQ,iInsert,fillvalue,1)
+    Estimate.QhatUnc_HatAllAll=np.insert(Estimate.QhatUnc_HatAllAll,iInsert,fillvalue,1)
 
     setid = '-'.join(reachids) + "_metroman.nc"
     outfile = outputdir.joinpath(setid)
@@ -174,7 +176,6 @@ def write_output(outputdir, reachids, Estimate, iDelete, nDelete, BadIS):
     dataset.valid =  1 if not BadIS else 0   # TODO decide what's valid if applicable
     dataset.createDimension("nr", len(reachids))
     dataset.createDimension("nt", len(Estimate.AllQ[0]))
-    dataset.createDimension("u", 2)    # TODO what do the two uncertainty values represent?
 
     nr = dataset.createVariable("nr", "i4", ("nr",))
     nr.units = "reach"
@@ -199,14 +200,16 @@ def write_output(outputdir, reachids, Estimate, iDelete, nDelete, BadIS):
     allq = dataset.createVariable("allq", "f8", ("nr", "nt"), fill_value=fillvalue)
     allq[:] = Estimate.AllQ
 
-    qu = dataset.createVariable("q_u", "f8", ("nr", "u"), fill_value=fillvalue)
-    qu[:] = Estimate.QhatUnc_HatAll
+    qu = dataset.createVariable("q_u", "f8", ("nr", "nt"), fill_value=fillvalue)
+    qu[:] = Estimate.QhatUnc_HatAllAll
 
     dataset.close()
 
 def main():
-    inputdir = Path("/mnt/data/input")
-    outputdir = Path("/mnt/data/output")
+#    inputdir = Path("/mnt/data/input")
+#    outputdir = Path("/mnt/data/output")
+    inputdir = Path("/Users/mtd/OneDrive - The Ohio State University/Analysis/SWOT/Discharge/Confluence/metroman_rundir")
+    outputdir = Path("/Users/mtd/OneDrive - The Ohio State University/Analysis/SWOT/Discharge/Confluence/metroman_outdir")
     try:
         reachjson = inputdir.joinpath(sys.argv[1])
     except IndexError:
@@ -225,7 +228,7 @@ def main():
         Estimate=Estimates(DAll,DAll)
         Estimate.nahat=np.full([DAll.nR],fillvalue)
         Estimate.x1hat=np.full([DAll.nR],fillvalue)
-        Estimate.QhatUnc_HatAll=np.full([DAll.nR,2],fillvalue) #this needs fixed once the uncertainty variable is fixed
+        Estimate.QhatUnc_HatAllAll=np.full([DAll.nR,DAll.nt],fillvalue) 
     else:
     	C, R, Exp, P = set_up_experiment(DAll, Qbar)
     	Estimate = process(DAll, AllObs, Exp, P, R, C)
