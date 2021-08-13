@@ -22,7 +22,7 @@ from metroman.MetropolisCalculations import MetropolisCalculations
 from metroman.ProcessPrior import ProcessPrior
 from metroman.SelObs import SelObs
 
-FILLVALUE = --999999999999
+FILLVALUE = -999999999999
 
 def get_reachids(reachjson):
     """Extract and return a list of reach identifiers from json file.
@@ -55,8 +55,6 @@ def get_domain_obs(nr):
     L=array([50e3, 50e3, 50e3, 50e3, 50e3, 50e3])
     DAll.L=L[0:nr]  #reach lengths, [m]
     DAll.nt=25 #number of overpasses
-    DAll.t=reshape(linspace(1,25,num=25),[1,25]) #time, [days]
-    DAll.dt= reshape(diff(DAll.t).T*86400 * ones((1,DAll.nR)),(DAll.nR*(DAll.nt-1),1))
 
     AllObs=Observations(DAll)
     AllObs.sigS=1.7e-5
@@ -74,36 +72,43 @@ def retrieve_obs(reachlist, inputdir, DAll, AllObs):
     for reach in reachlist:
         swotfile=inputdir.joinpath('swot', reach["swot"])
         swot_dataset = Dataset(swotfile)
-        AllObs.h[i,:]=swot_dataset["reach/wse"][0:DAll.nt]
-        AllObs.w[i,:]=swot_dataset["reach/width"][0:DAll.nt]
-        AllObs.S[i,:]=swot_dataset["reach/slope2"][0:DAll.nt]
+        AllObs.h[i,:]=swot_dataset["reach/wse"][0:DAll.nt].filled(np.nan)
+        AllObs.w[i,:]=swot_dataset["reach/width"][0:DAll.nt].filled(np.nan)
+        AllObs.S[i,:]=swot_dataset["reach/slope2"][0:DAll.nt].filled(np.nan)
         swot_dataset.close()
 
         sosfile=inputdir.joinpath('sos', reach["sos"])
         sos_dataset=Dataset(sosfile)
-
-        #print(reach["reach_id"])
         
         sosreachids=sos_dataset["reaches/reach_id"][:]
         sosQbars=sos_dataset["reaches/mean_q"][:]
         k=np.argwhere(sosreachids == reach["reach_id"])
 
         Qbar[i]=sosQbars[k]
-        #print(Qbar[i])
 
         sos_dataset.close()
 
         i += 1
 
-    #print(AllObs.h)
-    #print(AllObs.w)
-    #print(AllObs.S)
+
+    #select observations that are NOT equal to the fill value
+    iDelete=np.where(np.isnan(AllObs.h[0,:]))
+    shape_iDelete=np.shape(iDelete)
+    nDelete=shape_iDelete[1]
+    AllObs.h=np.delete(AllObs.h,iDelete,1)
+    AllObs.w=np.delete(AllObs.w,iDelete,1)
+    AllObs.S=np.delete(AllObs.S,iDelete,1)
+
+    DAll.nt -= nDelete
+
+    DAll.t=reshape(linspace(1,DAll.nt,num=DAll.nt),[1,DAll.nt]) #time, [days]
+    DAll.dt= reshape(diff(DAll.t).T*86400 * ones((1,DAll.nR)),(DAll.nR*(DAll.nt-1),1))
 
     # Reshape observations
     AllObs.hv=reshape(AllObs.h, (DAll.nR*DAll.nt,1))
     AllObs.Sv=reshape(AllObs.S, (DAll.nR*DAll.nt,1))
     AllObs.wv=reshape(AllObs.w, (DAll.nR*DAll.nt,1))
-    return Qbar
+    return Qbar,iDelete,nDelete
 
 def set_up_experiment(DAll, Qbar):
     """Define and set parameters for experiment and return a tuple of 
@@ -149,8 +154,14 @@ def process(DAll, AllObs, Exp, P, R, C):
     Estimate,C=CalculateEstimates(C,D,Obs,P,DAll,AllObs,Exp.nOpt) 
     return Estimate
 
-def write_output(outputdir, reachids, Estimate):
+def write_output(outputdir, reachids, Estimate,iDelete,nDelete):
     """Write data from MetroMan run to NetCDF file in output directory."""
+
+    #add back in placeholders for removed data
+    iInsert=iDelete-np.arange(nDelete)
+    iInsert=reshape(iInsert,[nDelete,])
+
+    Estimate.AllQ=np.insert(Estimate.AllQ,iInsert,-9999,1)
 
     setid = '-'.join(reachids) + "_metroman.nc"
     outfile = outputdir.joinpath(setid)
@@ -176,11 +187,11 @@ def write_output(outputdir, reachids, Estimate):
     A0 = dataset.createVariable("A0hat", "f8", ("nr",), fill_value=fillvalue)
     A0[:] = Estimate.A0hat
 
-    n = dataset.createVariable("nahat", "f8", ("nr",), fill_value=fillvalue)
-    n[:] = Estimate.nahat
+    na = dataset.createVariable("nahat", "f8", ("nr",), fill_value=fillvalue)
+    na[:] = Estimate.nahat
     
-    q = dataset.createVariable("x1hat", "f8", ("nr",), fill_value=fillvalue)
-    q[:] = Estimate.x1hat
+    x1 = dataset.createVariable("x1hat", "f8", ("nr",), fill_value=fillvalue)
+    x1[:] = Estimate.x1hat
 
     allq = dataset.createVariable("allq", "f8", ("nr", "nt"), fill_value=fillvalue)
     allq[:] = Estimate.AllQ
@@ -204,13 +215,14 @@ def main():
 
     DAll, AllObs = get_domain_obs(len(reachlist))
 
-    Qbar = retrieve_obs(reachlist, inputdir, DAll, AllObs)
+    Qbar,iDelete,nDelete = retrieve_obs(reachlist, inputdir, DAll, AllObs)
+
     C, R, Exp, P = set_up_experiment(DAll, Qbar)
     Estimate = process(DAll, AllObs, Exp, P, R, C)
 
-    #print(Estimate.AllQ)
     
-    #write_output(outputdir, reachlist, Estimate)
+    reachids = [ str(e["reach_id"]) for e in reachlist ]
+    write_output(outputdir, reachids, Estimate,iDelete,nDelete)
 
 if __name__ == "__main__":
    main()    
