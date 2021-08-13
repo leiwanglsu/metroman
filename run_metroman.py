@@ -17,7 +17,7 @@ import numpy as np
 from metroman.CalcdA import CalcdA
 from metroman.CalculateEstimates import CalculateEstimates
 from metroman.GetCovMats import GetCovMats
-from metroman.MetroManVariables import Domain,Observations,Chain,RandomSeeds,Experiment,Prior
+from metroman.MetroManVariables import Domain,Observations,Chain,RandomSeeds,Experiment,Prior,Estimates
 from metroman.MetropolisCalculations import MetropolisCalculations
 from metroman.ProcessPrior import ProcessPrior
 from metroman.SelObs import SelObs
@@ -40,7 +40,7 @@ def get_reachids(reachjson):
     """
 
     # index = int(os.environ.get("AWS_BATCH_JOB_ARRAY_INDEX"))
-    index = 0
+    index = 7
     with open(reachjson) as jsonfile:
         data = json.load(jsonfile)
     return data[index]
@@ -69,6 +69,7 @@ def retrieve_obs(reachlist, inputdir, DAll, AllObs):
 
     Qbar=empty([DAll.nR])
     i=0
+    BadIS=False
     for reach in reachlist:
         swotfile=inputdir.joinpath('swot', reach["swot"])
         swot_dataset = Dataset(swotfile)
@@ -77,16 +78,20 @@ def retrieve_obs(reachlist, inputdir, DAll, AllObs):
         AllObs.S[i,:]=swot_dataset["reach/slope2"][0:DAll.nt].filled(np.nan)
         swot_dataset.close()
 
-        sosfile=inputdir.joinpath('sos', reach["sos"])
-        sos_dataset=Dataset(sosfile)
-        
-        sosreachids=sos_dataset["reaches/reach_id"][:]
-        sosQbars=sos_dataset["reaches/mean_q"][:]
-        k=np.argwhere(sosreachids == reach["reach_id"])
+        nbad=np.count_nonzero(np.isnan(AllObs.h[0,:]))
+        if DAll.nt-nbad < 6: #note: 6 is typically minimum needed observations for metroman 
+            BadIS=True
+        else:
+             sosfile=inputdir.joinpath('sos', reach["sos"])
+             sos_dataset=Dataset(sosfile)
+             
+             sosreachids=sos_dataset["reaches/reach_id"][:]
+             sosQbars=sos_dataset["reaches/mean_q"][:]
+             k=np.argwhere(sosreachids == reach["reach_id"])
+     
+             Qbar[i]=sosQbars[k]
 
-        Qbar[i]=sosQbars[k]
-
-        sos_dataset.close()
+             sos_dataset.close()
 
         i += 1
 
@@ -108,7 +113,7 @@ def retrieve_obs(reachlist, inputdir, DAll, AllObs):
     AllObs.hv=reshape(AllObs.h, (DAll.nR*DAll.nt,1))
     AllObs.Sv=reshape(AllObs.S, (DAll.nR*DAll.nt,1))
     AllObs.wv=reshape(AllObs.w, (DAll.nR*DAll.nt,1))
-    return Qbar,iDelete,nDelete
+    return Qbar,iDelete,nDelete,BadIS
 
 def set_up_experiment(DAll, Qbar):
     """Define and set parameters for experiment and return a tuple of 
@@ -157,11 +162,13 @@ def process(DAll, AllObs, Exp, P, R, C):
 def write_output(outputdir, reachids, Estimate,iDelete,nDelete):
     """Write data from MetroMan run to NetCDF file in output directory."""
 
+    fillvalue = -9999
+
     #add back in placeholders for removed data
     iInsert=iDelete-np.arange(nDelete)
     iInsert=reshape(iInsert,[nDelete,])
 
-    Estimate.AllQ=np.insert(Estimate.AllQ,iInsert,-9999,1)
+    Estimate.AllQ=np.insert(Estimate.AllQ,iInsert,fillvalue,1)
 
     setid = '-'.join(reachids) + "_metroman.nc"
     outfile = outputdir.joinpath(setid)
@@ -172,7 +179,6 @@ def write_output(outputdir, reachids, Estimate,iDelete,nDelete):
     dataset.createDimension("nt", len(Estimate.AllQ[0]))
     dataset.createDimension("u", 2)    # TODO what do the two uncertainty values represent?
 
-    fillvalue = -9999
     nr = dataset.createVariable("nr", "i4", ("nr",))
     nr.units = "reach"
     nr[:] = range(1, len(Estimate.A0hat) + 1)
@@ -215,11 +221,19 @@ def main():
 
     DAll, AllObs = get_domain_obs(len(reachlist))
 
-    Qbar,iDelete,nDelete = retrieve_obs(reachlist, inputdir, DAll, AllObs)
+    Qbar,iDelete,nDelete,BadIS = retrieve_obs(reachlist, inputdir, DAll, AllObs)
 
-    C, R, Exp, P = set_up_experiment(DAll, Qbar)
-    Estimate = process(DAll, AllObs, Exp, P, R, C)
-
+    if BadIS:
+        fillvalue=-9999
+	#define and write fill value data
+        print("fewer than minimum number of swot passes. not running metroman for this set.")
+        Estimate=Estimates(DAll,DAll)
+        Estimate.nahat=np.full([DAll.nR],fillvalue)
+        Estimate.x1hat=np.full([DAll.nR],fillvalue)
+        Estimate.QhatUnc_HatAll=np.full([DAll.nR,2],fillvalue) #this needs fixed once the uncertainty variable is fixed
+    else:
+    	C, R, Exp, P = set_up_experiment(DAll, Qbar)
+    	Estimate = process(DAll, AllObs, Exp, P, R, C)
     
     reachids = [ str(e["reach_id"]) for e in reachlist ]
     write_output(outputdir, reachids, Estimate,iDelete,nDelete)
