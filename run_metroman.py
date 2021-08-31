@@ -37,13 +37,15 @@ def get_reachids(reachjson):
         List of reaches identifiers
     """
 
-    index = int(os.environ.get("AWS_BATCH_JOB_ARRAY_INDEX"))
+    #index = int(os.environ.get("AWS_BATCH_JOB_ARRAY_INDEX"))
+    index=0
     with open(reachjson) as jsonfile:
         data = json.load(jsonfile)
     return data[index]
 
 def get_domain_obs(nr):
     """Define and return domain and observations as a tuple."""
+    #this function for now is obsolete. may decide to revive it, so leaving here for now
 
     DAll=Domain()
     DAll.nR=nr #number of reaches
@@ -60,11 +62,31 @@ def get_domain_obs(nr):
 
     return DAll, AllObs
 
-def retrieve_obs(reachlist, inputdir, DAll, AllObs):
+def retrieve_obs(reachlist, inputdir):
     """ Retrieves data from SWOT and SoS files, populates observation object and
     returns qbar."""
 
-    Qbar=empty([DAll.nR])
+    # 0. set up domain - this could be moved to a separate function
+    nr=len(reachlist)   
+
+    DAll=Domain()
+    DAll.nR=nr #number of reaches
+    reach0=reachlist[0]
+    swotfile0=inputdir.joinpath('swot', reach0["swot"])
+    swot_dataset0 = Dataset(swotfile0)
+    nt=swot_dataset0.dimensions["nt"].size
+    swot_dataset0.close()
+    DAll.nt=nt
+
+    AllObs=Observations(DAll)
+    AllObs.sigS=1.7e-5
+    AllObs.sigh=0.1
+    AllObs.sigw=10
+
+    # 1. reading of observations
+    Qbar=empty(DAll.nR)
+    reach_length=empty(DAll.nR)
+    dist_out=empty(DAll.nR)
     i=0
     BadIS=False
     for reach in reachlist:
@@ -72,7 +94,7 @@ def retrieve_obs(reachlist, inputdir, DAll, AllObs):
         swot_dataset = Dataset(swotfile)
         AllObs.h[i,:]=swot_dataset["reach/wse"][0:DAll.nt].filled(np.nan)
         AllObs.w[i,:]=swot_dataset["reach/width"][0:DAll.nt].filled(np.nan)
-        AllObs.S[i,:]=swot_dataset["reach/slope2"][0:DAll.nt].filled(np.nan)
+        AllObs.S[i,:]=swot_dataset["reach/slope2"][0:nt].filled(np.nan)
         swot_dataset.close()
 
         nbad=np.count_nonzero(np.isnan(AllObs.h[0,:]))
@@ -90,10 +112,24 @@ def retrieve_obs(reachlist, inputdir, DAll, AllObs):
 
              sos_dataset.close()
 
+             swordfile=inputdir.joinpath('sword',reach["sword"])
+             sword_dataset=Dataset(swordfile)
+             swordreachids=sword_dataset["reaches/reach_id"][:]
+             k=np.argwhere(swordreachids == reach["reach_id"])
+
+             reach_lengths=sword_dataset["reaches/reach_length"][:]
+             reach_length[i]=reach_lengths[k]
+
+             dist_outs=sword_dataset["reaches/dist_out"][:]
+             dist_out[i]=dist_outs[k]
+
         i += 1
 
+    DAll.L=reach_length
+    xkm=array([25e3, 50e3, 75e3, 25e3, 50e3, 75e3])
+    DAll.xkm=np.max(dist_out)-dist_out + DAll.L[0]/2 #reach midpoint distance downstream [m]
 
-    #select observations that are NOT equal to the fill value
+    # 2. select observations that are NOT equal to the fill value
     iDelete=np.where(np.isnan(AllObs.h[0,:]))
     shape_iDelete=np.shape(iDelete)
     nDelete=shape_iDelete[1]
@@ -110,7 +146,7 @@ def retrieve_obs(reachlist, inputdir, DAll, AllObs):
     AllObs.hv=reshape(AllObs.h, (DAll.nR*DAll.nt,1))
     AllObs.Sv=reshape(AllObs.S, (DAll.nR*DAll.nt,1))
     AllObs.wv=reshape(AllObs.w, (DAll.nR*DAll.nt,1))
-    return Qbar,iDelete,nDelete,BadIS
+    return Qbar,iDelete,nDelete,BadIS,DAll,AllObs
 
 def set_up_experiment(DAll, Qbar):
     """Define and set parameters for experiment and return a tuple of 
@@ -205,19 +241,19 @@ def write_output(outputdir, reachids, Estimate, iDelete, nDelete, BadIS):
     dataset.close()
 
 def main():
-    inputdir = Path("/mnt/data/input")
-    outputdir = Path("/mnt/data/output")
+    inputdir = Path("/Users/mtd/OneDrive - The Ohio State University/Analysis/SWOT/Discharge/Confluence/metroman_rundir")
+    outputdir = Path("/Users/mtd/OneDrive - The Ohio State University/Analysis/SWOT/Discharge/Confluence/metroman_outdir")
 
     try:
         reachjson = inputdir.joinpath(sys.argv[1])
     except IndexError:
-        reachjson = inputdir.joinpath("sets.json") 
+        reachjson = inputdir.joinpath("sets-custom.json") 
 
     reachlist = get_reachids(reachjson)
 
-    DAll, AllObs = get_domain_obs(len(reachlist))
+    #DAll, AllObs = get_domain_obs(len(reachlist))
 
-    Qbar,iDelete,nDelete,BadIS = retrieve_obs(reachlist, inputdir, DAll, AllObs)
+    Qbar,iDelete,nDelete,BadIS,DAll,AllObs = retrieve_obs(reachlist, inputdir)
 
     if BadIS:
         fillvalue=-999999999999
