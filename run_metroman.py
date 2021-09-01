@@ -80,19 +80,11 @@ def retrieve_obs(reachlist, inputdir):
     ts=swot_dataset0["nt"][:]
     swot_dataset0.close()
 
-    tall=list()
-    for t in ts:
-         tstr=str(t)
-         year=int(tstr[0:4])
-         month=int(tstr[4:6])
-         day=int(tstr[6:8])
-         tdate=datetime.date(year,month,day)
-         tall.append(tdate)
+    tall = [ datetime.datetime.strptime(str(t), "%Y%m%d") for t in ts ]
 
     talli=empty(DAll.nt)
     for i in range(DAll.nt):
          talli[i]=(tall[i]-tall[0]).days
- 
 
     AllObs=Observations(DAll)
     AllObs.sigS=1.7e-5
