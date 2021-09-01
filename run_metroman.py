@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import datetime
 
 # Third party imports
 from netCDF4 import Dataset
@@ -75,8 +76,23 @@ def retrieve_obs(reachlist, inputdir):
     swotfile0=inputdir.joinpath('swot', reach0["swot"])
     swot_dataset0 = Dataset(swotfile0)
     nt=swot_dataset0.dimensions["nt"].size
-    swot_dataset0.close()
     DAll.nt=nt
+    ts=swot_dataset0["nt"][:]
+    swot_dataset0.close()
+
+    tall=list()
+    for t in ts:
+         tstr=str(t)
+         year=int(tstr[0:4])
+         month=int(tstr[4:6])
+         day=int(tstr[6:8])
+         tdate=datetime.date(year,month,day)
+         tall.append(tdate)
+
+    talli=empty(DAll.nt)
+    for i in range(DAll.nt):
+         talli[i]=(tall[i]-tall[0]).days
+ 
 
     AllObs=Observations(DAll)
     AllObs.sigS=1.7e-5
@@ -126,7 +142,6 @@ def retrieve_obs(reachlist, inputdir):
         i += 1
 
     DAll.L=reach_length
-    xkm=array([25e3, 50e3, 75e3, 25e3, 50e3, 75e3])
     DAll.xkm=np.max(dist_out)-dist_out + DAll.L[0]/2 #reach midpoint distance downstream [m]
 
     # 2. select observations that are NOT equal to the fill value
@@ -138,9 +153,13 @@ def retrieve_obs(reachlist, inputdir):
     AllObs.S=np.delete(AllObs.S,iDelete,1)
 
     DAll.nt -= nDelete
+    talli=np.delete(talli,iDelete)
 
-    DAll.t=reshape(linspace(1,DAll.nt,num=DAll.nt),[1,DAll.nt]) #time, [days]
-    DAll.dt= reshape(diff(DAll.t).T*86400 * ones((1,DAll.nR)),(DAll.nR*(DAll.nt-1),1))
+    DAll.dt=empty(DAll.nt-1)
+    for i in range(DAll.nt-1):
+         DAll.dt[i]=(talli[i+1]-talli[i])*86400
+
+    DAll.t=reshape(talli,[1,DAll.nt])
 
     # Reshape observations
     AllObs.hv=reshape(AllObs.h, (DAll.nR*DAll.nt,1))
