@@ -38,8 +38,8 @@ def get_reachids(reachjson):
         List of reaches identifiers
     """
 
-    #index = int(os.environ.get("AWS_BATCH_JOB_ARRAY_INDEX"))
-    index=0
+    # index = int(os.environ.get("AWS_BATCH_JOB_ARRAY_INDEX"))
+    index = 3
     with open(reachjson) as jsonfile:
         data = json.load(jsonfile)
     return data[index]
@@ -113,7 +113,7 @@ def retrieve_obs(reachlist, inputdir):
              sos_dataset=Dataset(sosfile)
              
              sosreachids=sos_dataset["reaches/reach_id"][:]
-             sosQbars=sos_dataset["reaches/mean_q"][:]
+             sosQbars=sos_dataset["model/mean_q"][:]
              k=np.argwhere(sosreachids == reach["reach_id"])
      
              Qbar[i]=sosQbars[k]
@@ -252,13 +252,13 @@ def write_output(outputdir, reachids, Estimate, iDelete, nDelete, BadIS):
     dataset.close()
 
 def main():
-    inputdir = Path("/Users/mtd/OneDrive - The Ohio State University/Analysis/SWOT/Discharge/Confluence/metroman_rundir")
-    outputdir = Path("/Users/mtd/OneDrive - The Ohio State University/Analysis/SWOT/Discharge/Confluence/metroman_outdir")
+    inputdir = Path("/mnt/data/input")
+    outputdir = Path("/mnt/data/output")
 
     try:
         reachjson = inputdir.joinpath(sys.argv[1])
     except IndexError:
-        reachjson = inputdir.joinpath("sets-custom.json") 
+        reachjson = inputdir.joinpath("sets.json") 
 
     reachlist = get_reachids(reachjson)
 
