@@ -38,8 +38,7 @@ def get_reachids(reachjson):
         List of reaches identifiers
     """
 
-    # index = int(os.environ.get("AWS_BATCH_JOB_ARRAY_INDEX"))
-    index = 3
+    index = int(os.environ.get("AWS_BATCH_JOB_ARRAY_INDEX"))
     with open(reachjson) as jsonfile:
         data = json.load(jsonfile)
     return data[index]
@@ -108,28 +107,32 @@ def retrieve_obs(reachlist, inputdir):
         nbad=np.count_nonzero(np.isnan(AllObs.h[0,:]))
         if DAll.nt-nbad < 6: #note: 6 is typically minimum needed observations for metroman 
             BadIS=True
-        else:
-             sosfile=inputdir.joinpath('sos', reach["sos"])
-             sos_dataset=Dataset(sosfile)
-             
-             sosreachids=sos_dataset["reaches/reach_id"][:]
-             sosQbars=sos_dataset["model/mean_q"][:]
-             k=np.argwhere(sosreachids == reach["reach_id"])
-     
-             Qbar[i]=sosQbars[k]
+            iDelete=0
+            nDelete=0
+            # Not enough data - invalid run
+            return Qbar,iDelete,nDelete,BadIS,DAll,AllObs
 
-             sos_dataset.close()
+        sosfile=inputdir.joinpath('sos', reach["sos"])
+        sos_dataset=Dataset(sosfile)
+        
+        sosreachids=sos_dataset["reaches/reach_id"][:]
+        sosQbars=sos_dataset["model/mean_q"][:]
+        k=np.argwhere(sosreachids == reach["reach_id"])
 
-             swordfile=inputdir.joinpath('sword',reach["sword"])
-             sword_dataset=Dataset(swordfile)
-             swordreachids=sword_dataset["reaches/reach_id"][:]
-             k=np.argwhere(swordreachids == reach["reach_id"])
+        Qbar[i]=sosQbars[k]
 
-             reach_lengths=sword_dataset["reaches/reach_length"][:]
-             reach_length[i]=reach_lengths[k]
+        sos_dataset.close()
 
-             dist_outs=sword_dataset["reaches/dist_out"][:]
-             dist_out[i]=dist_outs[k]
+        swordfile=inputdir.joinpath('sword',reach["sword"])
+        sword_dataset=Dataset(swordfile)
+        swordreachids=sword_dataset["reaches/reach_id"][:]
+        k=np.argwhere(swordreachids == reach["reach_id"])
+
+        reach_lengths=sword_dataset["reaches/reach_length"][:]
+        reach_length[i]=reach_lengths[k]
+
+        dist_outs=sword_dataset["reaches/dist_out"][:]
+        dist_out[i]=dist_outs[k]
 
         i += 1
 
@@ -273,7 +276,8 @@ def main():
         Estimate=Estimates(DAll,DAll)
         Estimate.nahat=np.full([DAll.nR],fillvalue)
         Estimate.x1hat=np.full([DAll.nR],fillvalue)
-        Estimate.QhatUnc_HatAllAll=np.full([DAll.nR,DAll.nt],fillvalue) 
+        Estimate.QhatUnc_HatAllAll=np.full([DAll.nR,DAll.nt],fillvalue)
+        Estimate.AllQ=np.full([DAll.nR,DAll.nt],fillvalue)
     else:
     	C, R, Exp, P = set_up_experiment(DAll, Qbar)
     	Estimate = process(DAll, AllObs, Exp, P, R, C)
