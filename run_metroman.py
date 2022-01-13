@@ -76,14 +76,17 @@ def retrieve_obs(reachlist, inputdir):
     swot_dataset0 = Dataset(swotfile0)
     nt=swot_dataset0.dimensions["nt"].size
     DAll.nt=nt
-    ts=swot_dataset0["nt"][:]
+    # ts=swot_dataset0["nt"][:]
+    ts = swot_dataset0["reach"]["time"][:]
     swot_dataset0.close()
 
-    tall = [ datetime.datetime.strptime(str(t), "%Y%m%d") for t in ts ]
+    # tall = [ datetime.datetime.strptime(str(t), "%Y%m%d") for t in ts ]
+    epoch = datetime.datetime(2000,1,1,0,0,0)
+    tall = [ epoch + datetime.timedelta(seconds=t) for t in ts ]
 
     talli=empty(DAll.nt)
     for i in range(DAll.nt):
-         talli[i]=(tall[i]-tall[0]).days
+        talli[i]=(tall[i]-tall[0]).days
 
     AllObs=Observations(DAll)
     AllObs.sigS=1.7e-5
@@ -279,8 +282,8 @@ def main():
         Estimate.QhatUnc_HatAllAll=np.full([DAll.nR,DAll.nt],fillvalue)
         Estimate.AllQ=np.full([DAll.nR,DAll.nt],fillvalue)
     else:
-    	C, R, Exp, P = set_up_experiment(DAll, Qbar)
-    	Estimate = process(DAll, AllObs, Exp, P, R, C)
+        C, R, Exp, P = set_up_experiment(DAll, Qbar)
+        Estimate = process(DAll, AllObs, Exp, P, R, C)
     
     reachids = [ str(e["reach_id"]) for e in reachlist ]
     write_output(outputdir, reachids, Estimate,iDelete,nDelete,BadIS)
