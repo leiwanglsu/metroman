@@ -77,7 +77,7 @@ def retrieve_obs(reachlist, inputdir):
     nt=swot_dataset0.dimensions["nt"].size
     DAll.nt=nt
     # ts=swot_dataset0["nt"][:]
-    ts = swot_dataset0["reach"]["time"][:]
+    ts = swot_dataset0["reach"]["time"][:].filled(0)
     swot_dataset0.close()
 
     # tall = [ datetime.datetime.strptime(str(t), "%Y%m%d") for t in ts ]
