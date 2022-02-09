@@ -153,7 +153,11 @@ def retrieve_obs(reachlist, inputdir, Verbose):
         sosQbars=sos_dataset["model/mean_q"][:]
         k=np.argwhere(sosreachids == reach["reach_id"])
 
-        Qbar[i]=sosQbars[k]
+        Qbar[i]=sosQbars[k].filled(np.nan)
+
+        if np.isnan(Qbar[i]):
+             print('Read in an invalid prior value. Stopping.')
+             BadIS=True
 
         sos_dataset.close()
 
