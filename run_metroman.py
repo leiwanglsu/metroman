@@ -111,6 +111,15 @@ def retrieve_obs(reachlist, inputdir, Verbose):
     dist_out=empty(DAll.nR)
     i=0
     BadIS=False
+
+    if DAll.nR < 2:
+        print('Not enough reaches in set.')
+        BadIS=True
+        iDelete=0
+        nDelete=0
+        return Qbar,iDelete,nDelete,BadIS,DAll,AllObs
+        
+
     for reach in reachlist:
         swotfile=inputdir.joinpath('swot', reach["swot"])
         swot_dataset = Dataset(swotfile)
