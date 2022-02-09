@@ -23,7 +23,7 @@ from metroman.MetropolisCalculations import MetropolisCalculations
 from metroman.ProcessPrior import ProcessPrior
 from metroman.SelObs import SelObs
 
-def get_reachids(reachjson):
+def get_reachids(reachjson,index_to_run):
     """Extract and return a list of reach identifiers from json file.
     
     Parameters
@@ -38,9 +38,19 @@ def get_reachids(reachjson):
         List of reaches identifiers
     """
 
-    index = int(os.environ.get("AWS_BATCH_JOB_ARRAY_INDEX"))
+    #index = int(os.environ.get("AWS_BATCH_JOB_ARRAY_INDEX"))
+    #index=1
+
+    if index_to_run == -235:
+        index=int(os.environ.get("AWS_BATCH_JOB_ARRAY_INDEX"))
+    else:
+        index=index_to_run
+  
     with open(reachjson) as jsonfile:
         data = json.load(jsonfile)
+
+    print(data[index])
+
     return data[index]
 
 def get_domain_obs(nr):
@@ -223,6 +233,7 @@ def write_output(outputdir, reachids, Estimate, iDelete, nDelete, BadIS):
 
     setid = '-'.join(reachids) + "_metroman.nc"
     outfile = outputdir.joinpath(setid)
+
     dataset = Dataset(outfile, 'w', format="NETCDF4")
     dataset.set_id = setid    # TODO decide on how to identify sets
     dataset.valid =  1 if not BadIS else 0   # TODO decide what's valid if applicable
@@ -258,15 +269,28 @@ def write_output(outputdir, reachids, Estimate, iDelete, nDelete, BadIS):
     dataset.close()
 
 def main():
-    inputdir = Path("/mnt/data/input")
-    outputdir = Path("/mnt/data/output")
 
+    # 0 specify i/o directories
+    inputdir = Path("/Users/mtd/Analysis/SWOT/Discharge/Confluence/verify/s1-flpe/metroman/input/")
+    outputdir = Path("/Users/mtd/Analysis/SWOT/Discharge/Confluence/verify/s1-flpe/metroman/output/")
+
+    # 1 get reachlist 
+    # 1.0 figure out json file. pull from command line arg or set to default
     try:
         reachjson = inputdir.joinpath(sys.argv[1])
     except IndexError:
         reachjson = inputdir.joinpath("sets.json") 
 
-    reachlist = get_reachids(reachjson)
+
+    # 1.1 specify index to run. pull from command line arg or set to default = AWS
+    try:
+        index_to_run=int(sys.argv[2]) #integer
+    except IndexError:
+        index_to_run=-235 #open to other options: that is ascii codes for A+W+S
+
+    # 1.2  read in data
+    reachlist = get_reachids(reachjson,index_to_run)
+
 
     #DAll, AllObs = get_domain_obs(len(reachlist))
 
