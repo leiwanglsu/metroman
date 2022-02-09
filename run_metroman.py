@@ -77,9 +77,6 @@ def retrieve_obs(reachlist, inputdir, Verbose):
     # 0. set up domain - this could be moved to a separate function
     nr=len(reachlist)   
 
-    if Verbose:
-        print('Number of reaches:',nr)
-
     DAll=Domain()
     DAll.nR=nr #number of reaches
     reach0=reachlist[0]
@@ -92,6 +89,7 @@ def retrieve_obs(reachlist, inputdir, Verbose):
     swot_dataset0.close()
 
     if Verbose:
+        print('Number of reaches:',nr)
         print('Total number of times:',nt)
 
     # tall = [ datetime.datetime.strptime(str(t), "%Y%m%d") for t in ts ]
@@ -119,7 +117,11 @@ def retrieve_obs(reachlist, inputdir, Verbose):
 
         nt_reach=swot_dataset.dimensions["nt"].size
         if nt_reach != DAll.nt:
-            print('Error! nt in ',swotfile,' is different than for',swotfile0)
+            print('nt in ',swotfile,' is different than for',swotfile0,'. Stopping.')
+            BadIS=True
+            iDelete=0
+            nDelete=0
+            return Qbar,iDelete,nDelete,BadIS,DAll,AllObs
 
         AllObs.h[i,:]=swot_dataset["reach/wse"][0:DAll.nt].filled(np.nan)
         AllObs.w[i,:]=swot_dataset["reach/width"][0:DAll.nt].filled(np.nan)
@@ -132,6 +134,7 @@ def retrieve_obs(reachlist, inputdir, Verbose):
             iDelete=0
             nDelete=0
             # Not enough data - invalid run
+            print('Not enough observations for this inversion set. Stopping.')
             return Qbar,iDelete,nDelete,BadIS,DAll,AllObs
 
         sosfile=inputdir.joinpath('sos', reach["sos"])
@@ -317,7 +320,7 @@ def main():
     if BadIS:
         fillvalue=-999999999999
 	    #define and write fill value data
-        print("fewer than minimum number of swot passes. not running metroman for this set.")
+        print("Not running metroman for this set.")
         Estimate=Estimates(DAll,DAll)
         Estimate.nahat=np.full([DAll.nR],fillvalue)
         Estimate.x1hat=np.full([DAll.nR],fillvalue)
