@@ -49,8 +49,6 @@ def get_reachids(reachjson,index_to_run):
     with open(reachjson) as jsonfile:
         data = json.load(jsonfile)
 
-    print(data[index])
-
     return data[index]
 
 def get_domain_obs(nr):
@@ -72,12 +70,15 @@ def get_domain_obs(nr):
 
     return DAll, AllObs
 
-def retrieve_obs(reachlist, inputdir):
+def retrieve_obs(reachlist, inputdir, Verbose):
     """ Retrieves data from SWOT and SoS files, populates observation object and
     returns qbar."""
 
     # 0. set up domain - this could be moved to a separate function
     nr=len(reachlist)   
+
+    if Verbose:
+        print('Number of reaches:',nr)
 
     DAll=Domain()
     DAll.nR=nr #number of reaches
@@ -89,6 +90,9 @@ def retrieve_obs(reachlist, inputdir):
     # ts=swot_dataset0["nt"][:]
     ts = swot_dataset0["reach"]["time"][:].filled(0)
     swot_dataset0.close()
+
+    if Verbose:
+        print('Total number of times:',nt)
 
     # tall = [ datetime.datetime.strptime(str(t), "%Y%m%d") for t in ts ]
     epoch = datetime.datetime(2000,1,1,0,0,0)
@@ -112,6 +116,11 @@ def retrieve_obs(reachlist, inputdir):
     for reach in reachlist:
         swotfile=inputdir.joinpath('swot', reach["swot"])
         swot_dataset = Dataset(swotfile)
+
+        nt_reach=swot_dataset.dimensions["nt"].size
+        if nt_reach != DAll.nt:
+            print('Error! nt in ',swotfile,' is different than for',swotfile0)
+
         AllObs.h[i,:]=swot_dataset["reach/wse"][0:DAll.nt].filled(np.nan)
         AllObs.w[i,:]=swot_dataset["reach/width"][0:DAll.nt].filled(np.nan)
         AllObs.S[i,:]=swot_dataset["reach/slope2"][0:nt].filled(np.nan)
@@ -270,9 +279,17 @@ def write_output(outputdir, reachids, Estimate, iDelete, nDelete, BadIS):
 
 def main():
 
-    # 0 specify i/o directories
+    # 0 control steps
+    # 0.1 specify i/o directories
     inputdir = Path("/Users/mtd/Analysis/SWOT/Discharge/Confluence/verify/s1-flpe/metroman/input/")
     outputdir = Path("/Users/mtd/Analysis/SWOT/Discharge/Confluence/verify/s1-flpe/metroman/output/")
+
+   # 0.2 determine the verbose flag
+    try: 
+        VerboseFlag=sys.argv[3]
+        if VerboseFlag == '-v': Verbose=True
+    except IndexError:
+        Verbose=False
 
     # 1 get reachlist 
     # 1.0 figure out json file. pull from command line arg or set to default
@@ -291,10 +308,11 @@ def main():
     # 1.2  read in data
     reachlist = get_reachids(reachjson,index_to_run)
 
+    if Verbose:
+        print('reachlist=')
+        print(reachlist)
 
-    #DAll, AllObs = get_domain_obs(len(reachlist))
-
-    Qbar,iDelete,nDelete,BadIS,DAll,AllObs = retrieve_obs(reachlist, inputdir)
+    Qbar,iDelete,nDelete,BadIS,DAll,AllObs = retrieve_obs(reachlist, inputdir,Verbose)
 
     if BadIS:
         fillvalue=-999999999999
