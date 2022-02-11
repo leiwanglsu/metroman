@@ -16,7 +16,7 @@ from metroman.logninvstat import logninvstat
 from metroman.CalcLklhd import CalcLklhd
 
 
-def MetropolisCalculations(Prior,D,Obs,jmp,C,R,DAll,AllObs,nOpt,DebugMode):
+def MetropolisCalculations(Prior,D,Obs,jmp,C,R,DAll,AllObs,nOpt,DebugMode,Verbose):
     [Delta,DeltaA,B,C,thetauA0,thetauna,thetaux1,thetauq,R]=InitializeMetropolis(D,C,Prior,R)
     
     if DebugMode:
@@ -72,7 +72,7 @@ def MetropolisCalculations(Prior,D,Obs,jmp,C,R,DAll,AllObs,nOpt,DebugMode):
     #%%
     tic=time.process_time()
     for i in range(0,C.N):
-        if i%1000==0:
+        if Verbose and i%1000==0:
             print("Iteration #", i+1, "/", C.N, ".")
         if i<C.N*.2 and i>0 and i%100==0:
             jmp.stdA0=mean(jmp.stdA0s[0:i-1] )/jmp.target1*(C.n_a1/i)
@@ -132,11 +132,13 @@ def MetropolisCalculations(Prior,D,Obs,jmp,C,R,DAll,AllObs,nOpt,DebugMode):
         C.Like[i]=exp(fu)
         C.LogLike[i]=fu
     
-    toc=time.process_time(); print('McFLI MCMC Time: %.2fs' %(toc-tic))
-    
-    print('A0: Acceptance rate =',(C.n_a1/C.N*100), ' pct.')
-    print('na: Acceptance rate =', (C.n_a2/C.N*100), ' pct.')
-    print('x1 Acceptance rate =', (C.n_a3/C.N*100), ' pct.')
+    toc=time.process_time() 
+
+    if Verbose:
+        print('McFLI MCMC Time: %.2fs' %(toc-tic))
+        print('A0: Acceptance rate =',(C.n_a1/C.N*100), ' pct.')
+        print('na: Acceptance rate =', (C.n_a2/C.N*100), ' pct.')
+        print('x1 Acceptance rate =', (C.n_a3/C.N*100), ' pct.')
     
     #%%
     return C

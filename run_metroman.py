@@ -113,7 +113,8 @@ def retrieve_obs(reachlist, inputdir, Verbose):
     BadIS=False
 
     if DAll.nR < 2:
-        print('Not enough reaches in set.')
+        if Verbose:
+            print('Not enough reaches in set.')
         BadIS=True
         iDelete=0
         nDelete=0
@@ -126,7 +127,8 @@ def retrieve_obs(reachlist, inputdir, Verbose):
 
         nt_reach=swot_dataset.dimensions["nt"].size
         if nt_reach != DAll.nt:
-            print('nt in ',swotfile,' is different than for',swotfile0,'. Stopping.')
+            if Verbose:
+                print('nt in ',swotfile,' is different than for',swotfile0,'. Stopping.')
             BadIS=True
             iDelete=0
             nDelete=0
@@ -143,7 +145,8 @@ def retrieve_obs(reachlist, inputdir, Verbose):
             iDelete=0
             nDelete=0
             # Not enough data - invalid run
-            print('Not enough observations for this inversion set. Stopping.')
+            if Verbose:
+                print('Not enough observations for this inversion set. Stopping.')
             return Qbar,iDelete,nDelete,BadIS,DAll,AllObs
 
         sosfile=inputdir.joinpath('sos', reach["sos"])
@@ -156,7 +159,8 @@ def retrieve_obs(reachlist, inputdir, Verbose):
         Qbar[i]=sosQbars[k].filled(np.nan)
 
         if np.isnan(Qbar[i]):
-             print('Read in an invalid prior value. Stopping.')
+             if Verbose:
+                 print('Read in an invalid prior value. Stopping.')
              BadIS=True
 
         sos_dataset.close()
@@ -223,7 +227,7 @@ def set_up_experiment(DAll, Qbar):
     P.AllLats.q=zeros((DAll.nR,DAll.nt))
     return C, R, Exp, P
 
-def process(DAll, AllObs, Exp, P, R, C):
+def process(DAll, AllObs, Exp, P, R, C, Verbose):
     """Process observations and priors and return an estimate."""
     
     D,Obs,AllObs,DAll,Truth,Prior.Lats.q=SelObs(DAll,AllObs,Exp,[],Prior.AllLats)
@@ -237,10 +241,10 @@ def process(DAll, AllObs, Exp, P, R, C):
     Obs.S[Obs.S<Smin]=putmask(Obs.S,Obs.S<Smin,Smin) #limit slopes to a minimum value
     AllObs.S[AllObs.S<Smin]=putmask(AllObs.S,AllObs.S<Smin,Smin)
 
-    P,jmp=ProcessPrior(P,AllObs,DAll,Obs,D,ShowFigs,Exp,R,DebugMode)
+    P,jmp=ProcessPrior(P,AllObs,DAll,Obs,D,ShowFigs,Exp,R,DebugMode,Verbose)
     Obs,P2=GetCovMats(D,Obs,Prior)
 
-    C=MetropolisCalculations(P,D,Obs,jmp,C,R,DAll,AllObs,Exp.nOpt,DebugMode)
+    C=MetropolisCalculations(P,D,Obs,jmp,C,R,DAll,AllObs,Exp.nOpt,DebugMode,Verbose)
     Estimate,C=CalculateEstimates(C,D,Obs,P,DAll,AllObs,Exp.nOpt) 
     return Estimate
 
@@ -327,13 +331,20 @@ def main():
     if Verbose:
         print('reachlist=')
         print(reachlist)
+ 
 
-    Qbar,iDelete,nDelete,BadIS,DAll,AllObs = retrieve_obs(reachlist, inputdir,Verbose)
+    if np.any(reachlist):
+        Qbar,iDelete,nDelete,BadIS,DAll,AllObs = retrieve_obs(reachlist, inputdir,Verbose)
+    else:
+        if Verbose:
+            print("No reaches in list for this inversion set. ")
+        print("FAIL. MetroMan will not run for this set. ")
+        return
 
     if BadIS:
         fillvalue=-999999999999
 	    #define and write fill value data
-        print("Not running metroman for this set.")
+        print("FAIL. MetroMan will not run for this set. ")
         Estimate=Estimates(DAll,DAll)
         Estimate.nahat=np.full([DAll.nR],fillvalue)
         Estimate.x1hat=np.full([DAll.nR],fillvalue)
@@ -341,7 +352,8 @@ def main():
         Estimate.AllQ=np.full([DAll.nR,DAll.nt],fillvalue)
     else:
         C, R, Exp, P = set_up_experiment(DAll, Qbar)
-        Estimate = process(DAll, AllObs, Exp, P, R, C)
+        Estimate = process(DAll, AllObs, Exp, P, R, C, Verbose)
+        print("SUCCESS. MetroMan ran for this set. ")
     
     reachids = [ str(e["reach_id"]) for e in reachlist ]
     write_output(outputdir, reachids, Estimate,iDelete,nDelete,BadIS)

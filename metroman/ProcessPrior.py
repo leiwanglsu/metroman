@@ -9,7 +9,7 @@ from metroman.logninvstat import logninvstat
 from metroman.calcnhat import calcnhat
 from metroman.MetroManVariables import Jump
 
-def ProcessPrior(Prior,AllObs,DAll,Obs,D,ShowFigs,E,R,DebugMode):
+def ProcessPrior(Prior,AllObs,DAll,Obs,D,ShowFigs,E,R,DebugMode,Verbose):
     #%% 1 handle input prior information
     #% note that A0min is refined for inclusion in the "jmp" variable at the bottom
     allA0min=empty((DAll.nR,1))
@@ -103,9 +103,9 @@ def ProcessPrior(Prior,AllObs,DAll,Obs,D,ShowFigs,E,R,DebugMode):
     tic=time.process_time()
     for j in range(0,DAll.nR):
     # for j in range(0,1):
-        
 
-        print("Processing prior for reach",j+1,"/",D.nR,".")
+        if Verbose: 
+            print("Processing prior for reach",j+1,"/",D.nR,".")
         
         A0u=thetaAllA0[j,0]
         nau=thetana[j,0]
@@ -221,7 +221,10 @@ def ProcessPrior(Prior,AllObs,DAll,Obs,D,ShowFigs,E,R,DebugMode):
             thetaQ[j,i]=Qu
             f[j,i]=fu
 
-    toc=time.process_time(); print('Prior MCMC Time: %.2fs' %(toc-tic))    
+    toc=time.process_time(); 
+
+    if Verbose:
+        print('Prior MCMC Time: %.2fs' %(toc-tic))    
                    
     #%% 4. Calculating final prior parameters
     Prior.meanAllA0=mean(thetaAllA0[:,Nburn+1:N],axis=1)
