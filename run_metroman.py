@@ -324,10 +324,16 @@ def main():
 
     # 0 control steps
     # 0.1 specify i/o directories
+
+    # Local Development Paths
     #inputdir = Path("/Users/mtd/Analysis/SWOT/Discharge/Confluence/verify/s1-flpe/metroman/input/")
     #outputdir = Path("/Users/mtd/Analysis/SWOT/Discharge/Confluence/verify/s1-flpe/metroman/output/output_constrained")
-    inputdir = Path("/Users/mtd/Analysis/SWOT/Discharge/Confluence/paper_debug/metro_inputs/input/")
-    outputdir = Path("/Users/mtd/Analysis/SWOT/Discharge/Confluence/paper_debug/metro_inputs/flpe/metroman/")
+    # inputdir = Path("/Users/mtd/Analysis/SWOT/Discharge/Confluence/paper_debug/metro_inputs/input/")
+    # outputdir = Path("/Users/mtd/Analysis/SWOT/Discharge/Confluence/paper_debug/metro_inputs/flpe/metroman/")
+
+    # AWS Mounted Paths
+    inputdir = Path("/mnt/data/input")    
+    outputdir = Path("/mnt/data/output")
 
 
    # 0.2 determine the verbose flag
