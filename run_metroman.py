@@ -323,25 +323,27 @@ def write_output(outputdir, reachids, Estimate, iDelete, nDelete, BadIS):
 def main():
 
     # 0 control steps
-    # 0.1 specify i/o directories
 
-    # Local Development Paths
-    #inputdir = Path("/Users/mtd/Analysis/SWOT/Discharge/Confluence/verify/s1-flpe/metroman/input/")
-    #outputdir = Path("/Users/mtd/Analysis/SWOT/Discharge/Confluence/verify/s1-flpe/metroman/output/output_constrained")
-    # inputdir = Path("/Users/mtd/Analysis/SWOT/Discharge/Confluence/paper_debug/metro_inputs/input/")
-    # outputdir = Path("/Users/mtd/Analysis/SWOT/Discharge/Confluence/paper_debug/metro_inputs/flpe/metroman/")
-
-    # AWS Mounted Paths
-    inputdir = Path("/mnt/data/input")    
-    outputdir = Path("/mnt/data/output")
-
-
-   # 0.2 determine the verbose flag
+    # 0.1 determine the verbose flag
     try: 
         VerboseFlag=sys.argv[3]
         if VerboseFlag == '-v': Verbose=True
     except IndexError:
         Verbose=False
+
+    # 0.2 specify index to run. pull from command line arg or set to default = AWS
+    try:
+        index_to_run=int(sys.argv[2]) #integer
+    except IndexError:
+        index_to_run=-235 #open to other options: that is ascii codes for A+W+S
+
+    # 0.3 specify i/o directories
+    if index_to_run == -235:
+        inputdir = Path("/mnt/data/input")    
+        outputdir = Path("/mnt/data/output")
+    else:
+        inputdir = Path("/Users/mtd/Analysis/SWOT/Discharge/Confluence/paper_debug/metro_inputs/input/")
+        outputdir = Path("/Users/mtd/Analysis/SWOT/Discharge/Confluence/paper_debug/metro_inputs/flpe/metroman/")
 
     # 1 get reachlist 
     # 1.0 figure out json file. pull from command line arg or set to default
@@ -349,12 +351,6 @@ def main():
         reachjson = inputdir.joinpath(sys.argv[1])
     except IndexError:
         reachjson = inputdir.joinpath("sets.json") 
-
-    # 1.1 specify index to run. pull from command line arg or set to default = AWS
-    try:
-        index_to_run=int(sys.argv[2]) #integer
-    except IndexError:
-        index_to_run=-235 #open to other options: that is ascii codes for A+W+S
 
     # 1.2  read in data
     reachlist = get_reachids(reachjson,index_to_run)
