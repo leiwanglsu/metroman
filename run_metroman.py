@@ -81,12 +81,18 @@ def retrieve_obs(reachlist, inputdir, Verbose):
     DAll.nR=nr #number of reaches
     reach0=reachlist[0]
     swotfile0=inputdir.joinpath('swot', reach0["swot"])
-    swot_dataset0 = Dataset(swotfile0)
-    nt=swot_dataset0.dimensions["nt"].size
-    DAll.nt=nt
-    # ts=swot_dataset0["nt"][:]
-    ts = swot_dataset0["reach"]["time"][:].filled(0)
-    swot_dataset0.close()
+    swot_file_exists=os.path.exists(swotfile0)
+
+    if swot_file_exists:  
+        swot_dataset0 = Dataset(swotfile0)
+        nt=swot_dataset0.dimensions["nt"].size
+        DAll.nt=nt
+        ts = swot_dataset0["reach"]["time"][:].filled(0)
+        swot_dataset0.close()
+    else:
+        ts=[0]
+        nt=0
+        DAll.nt=0
 
     if Verbose:
         print('Number of reaches:',nr)
@@ -98,12 +104,16 @@ def retrieve_obs(reachlist, inputdir, Verbose):
 
     talli=empty(DAll.nt)
     for i in range(DAll.nt):
-        talli[i]=(tall[i]-tall[0]).days
+        dt=(tall[i]-tall[0])
+        talli[i]=dt.days + dt.seconds/86400.
 
-    AllObs=Observations(DAll)
-    AllObs.sigS=1.7e-5
-    AllObs.sigh=0.1
-    AllObs.sigw=10
+    if swot_file_exists:   
+        AllObs=Observations(DAll)
+        AllObs.sigS=1.7e-5
+        AllObs.sigh=0.1
+        AllObs.sigw=10
+    else:
+        AllObs=0.
 
     # 1. reading of observations
     Qbar=empty(DAll.nR)
@@ -112,7 +122,7 @@ def retrieve_obs(reachlist, inputdir, Verbose):
     i=0
     BadIS=False
 
-    if DAll.nR < 2:
+    if DAll.nR < 2 or DAll.nt==0:
         if Verbose:
             print('Not enough reaches in set.')
         BadIS=True
@@ -123,9 +133,13 @@ def retrieve_obs(reachlist, inputdir, Verbose):
 
     for reach in reachlist:
         swotfile=inputdir.joinpath('swot', reach["swot"])
-        swot_dataset = Dataset(swotfile)
+        swot_file_exists=os.path.exists(swotfile)
+        if swot_file_exists:
+            swot_dataset = Dataset(swotfile)
+            nt_reach=swot_dataset.dimensions["nt"].size
+        else:
+            nt_reach=0
 
-        nt_reach=swot_dataset.dimensions["nt"].size
         if nt_reach != DAll.nt:
             if Verbose:
                 print('nt in ',swotfile,' is different than for',swotfile0,'. Stopping.')
@@ -176,13 +190,17 @@ def retrieve_obs(reachlist, inputdir, Verbose):
         dist_outs=sword_dataset["reaches/dist_out"][:]
         dist_out[i]=dist_outs[k]
 
+        sword_dataset.close()
+
         i += 1
 
     DAll.L=reach_length
     DAll.xkm=np.max(dist_out)-dist_out + DAll.L[0]/2 #reach midpoint distance downstream [m]
 
     # 2. select observations that are NOT equal to the fill value
-    iDelete=np.where(np.isnan(AllObs.h[0,:]))
+    #iDelete=np.where( np.any(np.isnan(AllObs.h),0) | np.any(np.isnan(AllObs.w),0) )
+    iDelete=np.where( np.any(np.isnan(AllObs.h),0) | np.any(np.isnan(AllObs.w),0) | np.any(np.isnan(AllObs.S),0) )
+
     shape_iDelete=np.shape(iDelete)
     nDelete=shape_iDelete[1]
     AllObs.h=np.delete(AllObs.h,iDelete,1)
@@ -215,7 +233,12 @@ def set_up_experiment(DAll, Qbar):
     R.Seed=9
 
     Exp=Experiment()
-    Exp.tUse=array([1,	31])
+
+    tUseMax=min(31,DAll.nt)
+
+    #Exp.tUse=array([1,	31])
+    Exp.tUse=array([1,	tUseMax-1])
+
     Exp.nOpt=5
 
     P=Prior(DAll)
@@ -301,8 +324,11 @@ def main():
 
     # 0 control steps
     # 0.1 specify i/o directories
-    inputdir = Path("/Users/mtd/Analysis/SWOT/Discharge/Confluence/verify/s1-flpe/metroman/input/")
-    outputdir = Path("/Users/mtd/Analysis/SWOT/Discharge/Confluence/verify/s1-flpe/metroman/output/")
+    #inputdir = Path("/Users/mtd/Analysis/SWOT/Discharge/Confluence/verify/s1-flpe/metroman/input/")
+    #outputdir = Path("/Users/mtd/Analysis/SWOT/Discharge/Confluence/verify/s1-flpe/metroman/output/output_constrained")
+    inputdir = Path("/Users/mtd/Analysis/SWOT/Discharge/Confluence/paper_debug/metro_inputs/input/")
+    outputdir = Path("/Users/mtd/Analysis/SWOT/Discharge/Confluence/paper_debug/metro_inputs/flpe/metroman/")
+
 
    # 0.2 determine the verbose flag
     try: 
@@ -318,7 +344,6 @@ def main():
     except IndexError:
         reachjson = inputdir.joinpath("sets.json") 
 
-
     # 1.1 specify index to run. pull from command line arg or set to default = AWS
     try:
         index_to_run=int(sys.argv[2]) #integer
@@ -331,7 +356,6 @@ def main():
     if Verbose:
         print('reachlist=')
         print(reachlist)
- 
 
     if np.any(reachlist):
         Qbar,iDelete,nDelete,BadIS,DAll,AllObs = retrieve_obs(reachlist, inputdir,Verbose)
@@ -352,6 +376,10 @@ def main():
         Estimate.AllQ=np.full([DAll.nR,DAll.nt],fillvalue)
     else:
         C, R, Exp, P = set_up_experiment(DAll, Qbar)
+
+        if Verbose:
+             print('Using window',Exp.tUse)
+
         Estimate = process(DAll, AllObs, Exp, P, R, C, Verbose)
         print("SUCCESS. MetroMan ran for this set. ")
     

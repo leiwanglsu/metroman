@@ -15,13 +15,17 @@ def SelObs(DAll,Obs,Exp,AllTruth,AllLats):
     D.L=DAll.L
     
     iEstBounds=arange(2)
-    
+
     for i in range(0,DAll.nt):
         if DAll.t[0,i]==float(Exp.tUse[0]):
             iEstBounds[0]=int(i)
         if DAll.t[0,i]==float(Exp.tUse[1]):
             iEstBounds[1]=int(i)
-        
+
+    #temporary
+    iEstBounds[0]=0
+    iEstBounds[1]=min(30,DAll.nt-1)
+
     Exp.iEst=arange(iEstBounds[0],iEstBounds[1]+1)
     
     D.t=DAll.t[:,Exp.iEst]         
