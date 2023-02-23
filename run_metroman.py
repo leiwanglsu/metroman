@@ -100,7 +100,7 @@ def retrieve_obs(reachlist, inputdir, Verbose):
 
     # tall = [ datetime.datetime.strptime(str(t), "%Y%m%d") for t in ts ]
     epoch = datetime.datetime(2000,1,1,0,0,0)
-    tall = [ epoch + datetime.timedelta(seconds=t) for t in ts ]
+    tall = [ epoch + datetime.timedelta(seconds=int(t)) for t in ts ]
 
     talli=empty(DAll.nt)
     for i in range(DAll.nt):
@@ -168,8 +168,7 @@ def retrieve_obs(reachlist, inputdir, Verbose):
         
         sosreachids=sos_dataset["reaches/reach_id"][:]
         sosQbars=sos_dataset["model/mean_q"][:]
-        k=np.argwhere(sosreachids == reach["reach_id"])
-
+        k=np.argwhere(sosreachids == float(reach["reach_id"]))
         Qbar[i]=sosQbars[k].filled(np.nan)
 
         if np.isnan(Qbar[i]):
@@ -350,7 +349,7 @@ def main():
     try:
         reachjson = inputdir.joinpath(sys.argv[1])
     except IndexError:
-        reachjson = inputdir.joinpath("sets.json") 
+        reachjson = inputdir.joinpath("metrosets.json") 
 
     # 1.2  read in data
     reachlist = get_reachids(reachjson,index_to_run)
