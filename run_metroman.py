@@ -209,6 +209,14 @@ def retrieve_obs(reachlist, inputdir, Verbose):
     DAll.nt -= nDelete
     talli=np.delete(talli,iDelete)
 
+    if DAll.nt==0:
+        if Verbose:
+            print(’Not enough reaches in set.’)
+        BadIS=True
+        iDelete=0
+        nDelete=0
+        return Qbar,iDelete,nDelete,BadIS,DAll,AllObs	
+	
     DAll.dt=empty(DAll.nt-1)
     for i in range(DAll.nt-1):
          DAll.dt[i]=(talli[i+1]-talli[i])*86400
