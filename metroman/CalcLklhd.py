@@ -55,8 +55,10 @@ def CalcLklhd(Obs,AllObs,A0,na,x1,D,Prior,Delta,DeltaA,B,qhatv,nOpt):
     Cf=Obs.CA + CdQ + Prior.Cqf +CdQm
     
     Theta=dQdxv+dAdtv-Prior.Lats.qv
-    
-    if isinf(cond(Cf)):
+
+    if Cf.size==0:
+        f=0
+    elif isinf(cond(Cf)):
         f=0
     else:
         f=-0.5*Theta.T @ inv(Cf) @ Theta
