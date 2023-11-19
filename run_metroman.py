@@ -211,7 +211,7 @@ def retrieve_obs(reachlist, inputdir, Verbose):
 
     if DAll.nt==0:
         if Verbose:
-            print(’Not enough reaches in set.’)
+            print('Not enough reaches in set.')
         BadIS=True
         iDelete=0
         nDelete=0
