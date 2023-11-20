@@ -9,3 +9,4 @@ metroman/__pycache__/
 *.pyc
 metroman/__pycache__/CalculateEstimates.cpython-38.pyc
 __pycache__
+.terraform
