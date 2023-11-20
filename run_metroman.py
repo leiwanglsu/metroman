@@ -124,7 +124,9 @@ def retrieve_obs(reachlist, inputdir, Verbose):
 
     if DAll.nR < 2 or DAll.nt==0:
         if Verbose:
-            print('Not enough reaches in set.')
+            print('Data issue')
+            print('nR=',DAll.nR)
+            print('nt=',DAll.nt)
         BadIS=True
         iDelete=0
         nDelete=0
@@ -211,10 +213,10 @@ def retrieve_obs(reachlist, inputdir, Verbose):
 
     if DAll.nt==0:
         if Verbose:
-            print('Not enough reaches in set.')
+            print('After removing bad data, there are zero remaining observations')
         BadIS=True
         iDelete=0
-        nDelete=0
+        #nDelete=0
         return Qbar,iDelete,nDelete,BadIS,DAll,AllObs	
 	
     DAll.dt=empty(DAll.nt-1)
@@ -350,8 +352,8 @@ def main():
         inputdir = Path("/mnt/data/input")    
         outputdir = Path("/mnt/data/output")
     else:
-        inputdir = Path("/Users/mtd/Analysis/SWOT/Discharge/Confluence/paper_debug/metro_inputs/input/")
-        outputdir = Path("/Users/mtd/Analysis/SWOT/Discharge/Confluence/paper_debug/metro_inputs/flpe/metroman/")
+        inputdir = Path("/home/mdurand_umass_edu/dev-confluence/mnt/input")
+        outputdir = Path("/home/mdurand_umass_edu/dev-confluence/mnt/output")
 
     # 1 get reachlist 
     # 1.0 figure out json file. pull from command line arg or set to default
@@ -372,19 +374,27 @@ def main():
     else:
         if Verbose:
             print("No reaches in list for this inversion set. ")
-        print("FAIL. MetroMan will not run for this set. ")
+        print("FAIL. No good reaches. MetroMan will not run for this set. ")
         return
 
     if BadIS:
         fillvalue=-999999999999
 	    #define and write fill value data
         print("FAIL. MetroMan will not run for this set. ")
-	DAll.nt += nDelete
+
+        print('DAll.nt=',DAll.nt)
+
+        DAll.nt += nDelete
+        
         Estimate=Estimates(DAll,DAll)
         Estimate.nahat=np.full([DAll.nR],fillvalue)
         Estimate.x1hat=np.full([DAll.nR],fillvalue)
+        Estimate.A0hat=np.full([DAll.nR],fillvalue)
         Estimate.QhatUnc_HatAllAll=np.full([DAll.nR,DAll.nt],fillvalue)
         Estimate.AllQ=np.full([DAll.nR,DAll.nt],fillvalue)
+
+        DAll.nt -= nDelete
+        nDelete=0
     else:
         C, R, Exp, P = set_up_experiment(DAll, Qbar)
 
