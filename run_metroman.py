@@ -379,6 +379,7 @@ def main():
         fillvalue=-999999999999
 	    #define and write fill value data
         print("FAIL. MetroMan will not run for this set. ")
+	DAll.nt += nDelete
         Estimate=Estimates(DAll,DAll)
         Estimate.nahat=np.full([DAll.nR],fillvalue)
         Estimate.x1hat=np.full([DAll.nR],fillvalue)
