@@ -395,6 +395,7 @@ def main():
 
         DAll.nt -= nDelete
         nDelete=0
+        iDelete=0
     else:
         C, R, Exp, P = set_up_experiment(DAll, Qbar)
 
