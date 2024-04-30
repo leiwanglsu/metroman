@@ -348,7 +348,7 @@ def main():
         index_to_run=-235 #open to other options: that is ascii codes for A+W+S
 
     # 0.3 specify i/o directories
-    if index_to_run == -235:
+    if index_to_run == -235 or "AWS_BATCH_JOB_ID" in os.environ:
         inputdir = Path("/mnt/data/input")    
         outputdir = Path("/mnt/data/output")
     else:
