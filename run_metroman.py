@@ -73,34 +73,72 @@ def get_domain_obs(nr):
 def retrieve_obs(reachlist, inputdir, Verbose):
     """ Retrieves data from SWOT and SoS files, populates observation object and
     returns qbar."""
+ 
+    # -1. figure out times by looking across all reaches and when they are measured
+    #       this solution is klugey. replace once pass ids available in swot ts files
+
+    # extract measured times
+    allts=dict()
+    for reach in reachlist:
+        swotfile=inputdir.joinpath('swot', reach["swot"])
+        swot_file_exists=os.path.exists(swotfile)
+        if swot_file_exists:
+            swot_dataset = Dataset(swotfile)
+            nt_reach=swot_dataset.dimensions["nt"].size
+            #ts = swot_dataset["reach"]["time"][:].filled(0) #seconds
+            #ts = list(swot_dataset["reach"]["time"][:].filled(0)) #seconds
+            ts = list(np.round(swot_dataset["reach"]["time"][:].filled(0)/3600.)) #hours
+            allts[reach['reach_id']]=ts
+            #print('reach=',reach['reach_id'],'nt=',nt_reach)
+            #print('ts=',ts)
+            swot_dataset.close()
+        else:
+            nt_reach=0
+
+    # determine overlapping measured times
+    overlap_fs=dict()
+    for i,reach in enumerate(reachlist):
+        if i==0:
+            overlap_ts=list(allts[reach['reach_id']]) #initialize
+            nt_reach=len(overlap_ts)
+            overlap_fs[reach['reach_id']]=np.full( (nt_reach,),True )
+        else:
+            overlap_ts=list( set(overlap_ts).intersection(set(allts[reach['reach_id']])))
+            nt_reach=len(list(allts[reach['reach_id']]))
+            overlap_fs[reach['reach_id']]=np.full( (nt_reach,),False)
+            for ii,t in enumerate(list(allts[reach['reach_id']])):
+                if t in overlap_ts:
+                    #print('reach=',reach['reach_id'],'t=',t,'found in overlap')
+                    overlap_fs[reach['reach_id']][ii]=True
+
+    #loop over all reaches and fix overlap_fs if needed
+    for i,reach in enumerate(reachlist):
+        for ii,t in enumerate(list(allts[reach['reach_id']])):
+            if t in overlap_ts:
+                overlap_fs[reach['reach_id']][ii]=True
+            else:
+                overlap_fs[reach['reach_id']][ii]=False
+
+    overlap_ts.sort()
+    nt=len(overlap_ts)
 
     # 0. set up domain - this could be moved to a separate function
     nr=len(reachlist)   
 
     DAll=Domain()
     DAll.nR=nr #number of reaches
-    reach0=reachlist[0]
-    swotfile0=inputdir.joinpath('swot', reach0["swot"])
-    swot_file_exists=os.path.exists(swotfile0)
-
-    if swot_file_exists:  
-        swot_dataset0 = Dataset(swotfile0)
-        nt=swot_dataset0.dimensions["nt"].size
-        DAll.nt=nt
-        ts = swot_dataset0["reach"]["time"][:].filled(0)
-        swot_dataset0.close()
-    else:
-        ts=[0]
-        nt=0
-        DAll.nt=0
+    DAll.nt=nt
 
     if Verbose:
         print('Number of reaches:',nr)
-        print('Total number of times:',nt)
+        print('Total number of times (after intersecting among reach timeseries):',nt)
 
     # tall = [ datetime.datetime.strptime(str(t), "%Y%m%d") for t in ts ]
     epoch = datetime.datetime(2000,1,1,0,0,0)
-    tall = [ epoch + datetime.timedelta(seconds=int(t)) for t in ts ]
+    #tall = [ epoch + datetime.timedelta(seconds=int(t)) for t in ts ]
+    tall = [ epoch + datetime.timedelta(hours=int(t)) for t in overlap_ts ]
+
+    #print(tall)
 
     talli=empty(DAll.nt)
     for i in range(DAll.nt):
@@ -115,13 +153,13 @@ def retrieve_obs(reachlist, inputdir, Verbose):
     else:
         AllObs=0.
 
-    # 1. reading of observations
+    # 1. read observations
     Qbar=empty(DAll.nR)
     reach_length=empty(DAll.nR)
     dist_out=empty(DAll.nR)
-    i=0
     BadIS=False
 
+    # 1.1 check that there are enough reaches and times
     if DAll.nR < 2 or DAll.nt==0:
         if Verbose:
             print('Data issue')
@@ -131,8 +169,10 @@ def retrieve_obs(reachlist, inputdir, Verbose):
         iDelete=0
         nDelete=0
         return Qbar,iDelete,nDelete,BadIS,DAll,AllObs
-        
 
+  
+    # 1.3 loop over files and extract data
+    i=0
     for reach in reachlist:
         swotfile=inputdir.joinpath('swot', reach["swot"])
         swot_file_exists=os.path.exists(swotfile)
@@ -142,28 +182,26 @@ def retrieve_obs(reachlist, inputdir, Verbose):
         else:
             nt_reach=0
 
-        if nt_reach != DAll.nt:
+        nt_reach_overlap=sum(overlap_fs[reach['reach_id']])
+
+        if nt_reach_overlap != DAll.nt:
             if Verbose:
-                print('nt in ',swotfile,' is different than for',swotfile0,'. Stopping.')
+                print('number of good observations for reach',reach['reach_id'],'does not match number of obs for set')
+                #print(overlap_fs[reach['reach_id']])
+                print(' ... nt_reach_overlap=',nt_reach_overlap,'DAll.nt=',DAll.nt,'nt_reach=',nt_reach)
             BadIS=True
             iDelete=0
             nDelete=0
             return Qbar,iDelete,nDelete,BadIS,DAll,AllObs
 
-        AllObs.h[i,:]=swot_dataset["reach/wse"][0:DAll.nt].filled(np.nan)
-        AllObs.w[i,:]=swot_dataset["reach/width"][0:DAll.nt].filled(np.nan)
-        AllObs.S[i,:]=swot_dataset["reach/slope2"][0:nt].filled(np.nan)
+        h=swot_dataset["reach/wse"][0:nt_reach].filled(np.nan)
+        AllObs.h[i,:]=h[overlap_fs[reach['reach_id']]]
+        w=swot_dataset["reach/width"][0:nt_reach].filled(np.nan)
+        AllObs.w[i,:]=w[overlap_fs[reach['reach_id']]]
+        S=swot_dataset["reach/slope2"][0:nt_reach].filled(np.nan)
+        AllObs.S[i,:]=S[overlap_fs[reach['reach_id']]]
+
         swot_dataset.close()
-
-        nbad=np.count_nonzero(np.isnan(AllObs.h[0,:]))
-        if DAll.nt-nbad < 6: #note: 6 is typically minimum needed observations for metroman 
-            BadIS=True
-            iDelete=0
-            nDelete=0
-            # Not enough data - invalid run
-            if Verbose:
-                print('Not enough observations for this inversion set. Stopping.')
-            return Qbar,iDelete,nDelete,BadIS,DAll,AllObs
 
         sosfile=inputdir.joinpath('sos', reach["sos"])
         sos_dataset=Dataset(sosfile)
@@ -177,7 +215,6 @@ def retrieve_obs(reachlist, inputdir, Verbose):
              if Verbose:
                  print('Read in an invalid prior value. Stopping.')
              BadIS=True
-
         sos_dataset.close()
 
         swordfile=inputdir.joinpath('sword',reach["sword"])
@@ -190,7 +227,6 @@ def retrieve_obs(reachlist, inputdir, Verbose):
 
         dist_outs=sword_dataset["reaches/dist_out"][:]
         dist_out[i]=dist_outs[k]
-
         sword_dataset.close()
 
         i += 1
@@ -199,7 +235,14 @@ def retrieve_obs(reachlist, inputdir, Verbose):
     DAll.xkm=np.max(dist_out)-dist_out + DAll.L[0]/2 #reach midpoint distance downstream [m]
 
     # 2. select observations that are NOT equal to the fill value
-    #iDelete=np.where( np.any(np.isnan(AllObs.h),0) | np.any(np.isnan(AllObs.w),0) )
+
+    if Verbose:
+        print('before filtering bad data')
+        print('nt=',DAll.nt)
+        print('h=',AllObs.h)
+        print('w=',AllObs.w)
+        print('S=',AllObs.S)
+
     iDelete=np.where( np.any(np.isnan(AllObs.h),0) | np.any(np.isnan(AllObs.w),0) | np.any(np.isnan(AllObs.S),0) )
 
     shape_iDelete=np.shape(iDelete)
@@ -211,9 +254,16 @@ def retrieve_obs(reachlist, inputdir, Verbose):
     DAll.nt -= nDelete
     talli=np.delete(talli,iDelete)
 
-    if DAll.nt==0:
+    if Verbose:
+        print('before filtering bad data')
+        print('nt=',DAll.nt)
+        print('h=',AllObs.h)
+        print('w=',AllObs.w)
+        print('S=',AllObs.S)
+
+    if DAll.nt<6:
         if Verbose:
-            print('After removing bad data, there are zero remaining observations')
+            print('After removing bad data, there are fewer than 6 remaining observations. Quitting.')
         BadIS=True
         iDelete=0
         #nDelete=0
@@ -352,8 +402,10 @@ def main():
         inputdir = Path("/mnt/data/input")    
         outputdir = Path("/mnt/data/output")
     else:
-        inputdir = Path("/home/mdurand_umass_edu/dev-confluence/mnt/input")
-        outputdir = Path("/home/mdurand_umass_edu/dev-confluence/mnt/output")
+        #inputdir = Path("/home/mdurand_umass_edu/dev-confluence/mnt/input")
+        #outputdir = Path("/home/mdurand_umass_edu/dev-confluence/mnt/output")
+        inputdir = Path("/Users/mtd/Analysis/SWOT/Discharge/Confluence/metroman_debug/mnt/input")
+        outputdir = Path("/Users/mtd/Analysis/SWOT/Discharge/Confluence/metroman_debug/output")
 
     # 1 get reachlist 
     # 1.0 figure out json file. pull from command line arg or set to default
