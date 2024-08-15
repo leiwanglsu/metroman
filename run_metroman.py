@@ -121,13 +121,21 @@ def retrieve_obs(reachlist, inputdir, Verbose):
                 if t in overlap_ts:
                     #print('reach=',reach['reach_id'],'t=',t,'found in overlap')
                     overlap_fs[reach['reach_id']][ii]=True
+        if Verbose:
+            print('for reach',reach['reach_id'],'nt=',nt_reach)
+            
 
     #loop over all reaches and fix overlap_fs if needed
     for i,reach in enumerate(reachlist):
-        for ii,t in enumerate(list(allts[reach['reach_id']])):
+        tarray=np.array(allts[reach['reach_id']])
+        #for ii,t in enumerate(list(allts[reach['reach_id']])):
+        for ii,t in enumerate(list(tarray)):
             if t in overlap_ts:
                 overlap_fs[reach['reach_id']][ii]=True
             else:
+                overlap_fs[reach['reach_id']][ii]=False
+            # check if this is a duplicated value
+            if t in list(tarray[:ii]):
                 overlap_fs[reach['reach_id']][ii]=False
 
     overlap_ts.sort()
@@ -200,6 +208,9 @@ def retrieve_obs(reachlist, inputdir, Verbose):
             if Verbose:
                 print('number of good observations for reach',reach['reach_id'],'does not match number of obs for set')
                 print(overlap_fs[reach['reach_id']])
+                print('tall=',tall)
+                print('allts[reach]=',allts[reach['reach_id']])
+                print('allts[reach]=',list(set(allts[reach['reach_id']])))
                 print(' ... nt_reach_overlap=',nt_reach_overlap,'DAll.nt=',DAll.nt,'nt_reach=',nt_reach)
             BadIS=True
             iDelete=0
@@ -273,9 +284,11 @@ def retrieve_obs(reachlist, inputdir, Verbose):
         print('w=',AllObs.w)
         print('S=',AllObs.S)
 
-    if DAll.nt<6:
+    ntmin=4
+
+    if DAll.nt<ntmin:
         if Verbose:
-            print('After removing bad data, there are fewer than 6 remaining observations. Quitting.')
+            print('After removing bad data, there are fewer than', ntmin ,'remaining observations. Quitting.')
         BadIS=True
         iDelete=0
         #nDelete=0
