@@ -72,7 +72,13 @@ def get_domain_obs(nr):
 
 def retrieve_obs(reachlist, inputdir, Verbose):
     """ Retrieves data from SWOT and SoS files, populates observation object and
-    returns qbar."""
+    returns qbar.
+    -1: figure out overlapping times among reaches
+     0: set up domain
+     1: read observations
+     2: select non-fill observations
+
+"""
  
     # -1. figure out times by looking across all reaches and when they are measured
     #       this solution is klugey. replace once pass ids available in swot ts files
@@ -87,7 +93,8 @@ def retrieve_obs(reachlist, inputdir, Verbose):
             nt_reach=swot_dataset.dimensions["nt"].size
             #ts = swot_dataset["reach"]["time"][:].filled(0) #seconds
             #ts = list(swot_dataset["reach"]["time"][:].filled(0)) #seconds
-            ts = list(np.round(swot_dataset["reach"]["time"][:].filled(0)/3600.)) #hours
+            #ts = list(np.round(swot_dataset["reach"]["time"][:].filled(0)/3600.)) #hours
+            ts = list(np.round(swot_dataset["reach"]["time"][:].filled(np.nan)/3600.)) #hours
             allts[reach['reach_id']]=ts
             #print('reach=',reach['reach_id'],'nt=',nt_reach)
             #print('ts=',ts)
@@ -95,15 +102,19 @@ def retrieve_obs(reachlist, inputdir, Verbose):
         else:
             nt_reach=0
 
-    # determine overlapping measured times
+    # determine overlapping measured times and a filter for each reach indicating which times
+    #    for that reach are in the overlap
     overlap_fs=dict()
     for i,reach in enumerate(reachlist):
         if i==0:
-            overlap_ts=list(allts[reach['reach_id']]) #initialize
-            nt_reach=len(overlap_ts)
+            treach=[t for t in allts[reach['reach_id']]  if not np.isnan(t) ]
+            #overlap_ts=list(treach)
+            overlap_ts=treach
+            nt_reach=len(allts[reach['reach_id']])
             overlap_fs[reach['reach_id']]=np.full( (nt_reach,),True )
         else:
-            overlap_ts=list( set(overlap_ts).intersection(set(allts[reach['reach_id']])))
+            treach=[t for t in allts[reach['reach_id']]  if not np.isnan(t) ]
+            overlap_ts=list( set(overlap_ts).intersection(set(treach)))
             nt_reach=len(list(allts[reach['reach_id']]))
             overlap_fs[reach['reach_id']]=np.full( (nt_reach,),False)
             for ii,t in enumerate(list(allts[reach['reach_id']])):
@@ -132,6 +143,7 @@ def retrieve_obs(reachlist, inputdir, Verbose):
     if Verbose:
         print('Number of reaches:',nr)
         print('Total number of times (after intersecting among reach timeseries):',nt)
+        print('overlapping times are: ',overlap_ts)
 
     # tall = [ datetime.datetime.strptime(str(t), "%Y%m%d") for t in ts ]
     epoch = datetime.datetime(2000,1,1,0,0,0)
@@ -187,7 +199,7 @@ def retrieve_obs(reachlist, inputdir, Verbose):
         if nt_reach_overlap != DAll.nt:
             if Verbose:
                 print('number of good observations for reach',reach['reach_id'],'does not match number of obs for set')
-                #print(overlap_fs[reach['reach_id']])
+                print(overlap_fs[reach['reach_id']])
                 print(' ... nt_reach_overlap=',nt_reach_overlap,'DAll.nt=',DAll.nt,'nt_reach=',nt_reach)
             BadIS=True
             iDelete=0
@@ -255,7 +267,7 @@ def retrieve_obs(reachlist, inputdir, Verbose):
     talli=np.delete(talli,iDelete)
 
     if Verbose:
-        print('before filtering bad data')
+        print('after filtering bad data')
         print('nt=',DAll.nt)
         print('h=',AllObs.h)
         print('w=',AllObs.w)
