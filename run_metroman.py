@@ -304,7 +304,7 @@ def retrieve_obs(reachlist, inputdir, Verbose):
     AllObs.hv=reshape(AllObs.h, (DAll.nR*DAll.nt,1))
     AllObs.Sv=reshape(AllObs.S, (DAll.nR*DAll.nt,1))
     AllObs.wv=reshape(AllObs.w, (DAll.nR*DAll.nt,1))
-    return Qbar,iDelete,nDelete,BadIS,DAll,AllObs
+    return Qbar,iDelete,nDelete,BadIS,DAll,AllObs,overlap_ts
 
 def set_up_experiment(DAll, Qbar):
     """Define and set parameters for experiment and return a tuple of 
@@ -356,7 +356,7 @@ def process(DAll, AllObs, Exp, P, R, C, Verbose):
     Estimate,C=CalculateEstimates(C,D,Obs,P,DAll,AllObs,Exp.nOpt) 
     return Estimate
 
-def write_output(outputdir, reachids, Estimate, iDelete, nDelete, BadIS):
+def write_output(outputdir, reachids, Estimate, iDelete, nDelete, BadIS,overlap_ts):
     """Write data from MetroMan run to NetCDF file in output directory."""
 
     fillvalue = -999999999999
@@ -372,7 +372,7 @@ def write_output(outputdir, reachids, Estimate, iDelete, nDelete, BadIS):
     outfile = outputdir.joinpath(setid)
 
     dataset = Dataset(outfile, 'w', format="NETCDF4")
-    dataset.set_id = setid    # TODO decide on how to identify sets
+    dataset.set_id = setid    
     dataset.valid =  1 if not BadIS else 0   # TODO decide what's valid if applicable
     dataset.createDimension("nr", len(reachids))
     dataset.createDimension("nt", len(Estimate.AllQ[0]))
@@ -402,6 +402,10 @@ def write_output(outputdir, reachids, Estimate, iDelete, nDelete, BadIS):
 
     qu = dataset.createVariable("q_u", "f8", ("nr", "nt"), fill_value=fillvalue)
     qu[:] = Estimate.QhatUnc_HatAllAll
+
+    t = dataset.createVariable("t","f8",("nt"),fill_value=fillvalue)
+    t.long_name= 'swot timeseries "time" variable converted to hours and rounded to integer'
+    t[:] = overlap_ts
 
     dataset.close()
 
@@ -447,7 +451,7 @@ def main():
         print(reachlist)
 
     if np.any(reachlist):
-        Qbar,iDelete,nDelete,BadIS,DAll,AllObs = retrieve_obs(reachlist, inputdir,Verbose)
+        Qbar,iDelete,nDelete,BadIS,DAll,AllObs,overlap_ts = retrieve_obs(reachlist, inputdir,Verbose)
     else:
         if Verbose:
             print("No reaches in list for this inversion set. ")
@@ -483,7 +487,7 @@ def main():
         print("SUCCESS. MetroMan ran for this set. ")
     
     reachids = [ str(e["reach_id"]) for e in reachlist ]
-    write_output(outputdir, reachids, Estimate,iDelete,nDelete,BadIS)
+    write_output(outputdir, reachids, Estimate,iDelete,nDelete,BadIS,overlap_ts)
 
 if __name__ == "__main__":
    main()    
