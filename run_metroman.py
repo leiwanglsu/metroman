@@ -105,6 +105,7 @@ def retrieve_obs(reachlist, inputdir, Verbose):
     # determine overlapping measured times and a filter for each reach indicating which times
     #    for that reach are in the overlap
     overlap_fs=dict()
+    overlap_ts = []
     for i,reach in enumerate(reachlist):
         if i==0:
             treach=[t for t in allts[reach['reach_id']]  if not np.isnan(t) ]
@@ -215,7 +216,8 @@ def retrieve_obs(reachlist, inputdir, Verbose):
             BadIS=True
             iDelete=0
             nDelete=0
-            return Qbar,iDelete,nDelete,BadIS,DAll,AllObs
+            # overlap_ts = []
+            return Qbar,iDelete,nDelete,BadIS,DAll,AllObs,overlap_ts 
 
         h=swot_dataset["reach/wse"][0:nt_reach].filled(np.nan)
         AllObs.h[i,:]=h[overlap_fs[reach['reach_id']]]
@@ -289,10 +291,13 @@ def retrieve_obs(reachlist, inputdir, Verbose):
     if DAll.nt<ntmin:
         if Verbose:
             print('After removing bad data, there are fewer than', ntmin ,'remaining observations. Quitting.')
+        
         BadIS=True
         iDelete=0
-        #nDelete=0
-        return Qbar,iDelete,nDelete,BadIS,DAll,AllObs	
+        nDelete=0
+        
+        # overlap_ts = []
+        return Qbar,iDelete,nDelete,BadIS,DAll,AllObs, overlap_ts	
 	
     DAll.dt=empty(DAll.nt-1)
     for i in range(DAll.nt-1):
