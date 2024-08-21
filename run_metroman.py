@@ -3,6 +3,7 @@ contains A0, n, and Q time series.
 """
 
 # Standard imports
+import argparse
 import json
 import os
 from pathlib import Path
@@ -22,8 +23,9 @@ from metroman.MetroManVariables import Domain,Observations,Chain,RandomSeeds,Exp
 from metroman.MetropolisCalculations import MetropolisCalculations
 from metroman.ProcessPrior import ProcessPrior
 from metroman.SelObs import SelObs
+from sos_read.sos_read import download_sos
 
-def get_reachids(reachjson,index_to_run):
+def get_reachids(reachjson,index_to_run,tmp_dir,sos_bucket):
     """Extract and return a list of reach identifiers from json file.
     
     Parameters
@@ -49,6 +51,10 @@ def get_reachids(reachjson,index_to_run):
     with open(reachjson) as jsonfile:
         data = json.load(jsonfile)
 
+    if sos_bucket:
+        sos_file = tmp_dir.joinpath(data[index][0]["sos"])    # just grab first in set
+        download_sos(sos_bucket, sos_file)
+    
     return data[index]
 
 def get_domain_obs(nr):
@@ -70,7 +76,7 @@ def get_domain_obs(nr):
 
     return DAll, AllObs
 
-def retrieve_obs(reachlist, inputdir, Verbose):
+def retrieve_obs(reachlist, inputdir, sosdir, Verbose):
     """ Retrieves data from SWOT and SoS files, populates observation object and
     returns qbar."""
 
@@ -165,7 +171,7 @@ def retrieve_obs(reachlist, inputdir, Verbose):
                 print('Not enough observations for this inversion set. Stopping.')
             return Qbar,iDelete,nDelete,BadIS,DAll,AllObs
 
-        sosfile=inputdir.joinpath('sos', reach["sos"])
+        sosfile=sosdir.joinpath(reach["sos"])
         sos_dataset=Dataset(sosfile)
         
         sosreachids=sos_dataset["reaches/reach_id"][:]
@@ -330,47 +336,77 @@ def write_output(outputdir, reachids, Estimate, iDelete, nDelete, BadIS):
 
     dataset.close()
 
+def create_args():
+    """Create and return argparsers with command line arguments."""
+    
+    arg_parser = argparse.ArgumentParser(description='Integrate FLPE')
+    arg_parser.add_argument('-i',
+                            '--index',
+                            type=int,
+                            help='Index to specify input data to execute on')
+    arg_parser.add_argument('-r',
+                            '--reachjson',
+                            type=str,
+                            help='Name of the reach.json',
+                            default='metrosets.json')
+    arg_parser.add_argument('-v',
+                            '--verbose',
+                            help='Indicates verbose logging',
+                            action='store_true')
+    arg_parser.add_argument('-s',
+                            '--sosbucket',
+                            type=str,
+                            help='Name of the SoS bucket and key to download from',
+                            default='')
+    return arg_parser
+
 def main():
 
     # 0 control steps
+    arg_parser = create_args()
+    args = arg_parser.parse_args()
+    print('index: ', args.index)
+    print('reach file: ', args.reachjson)
+    print('verbose flag: ', args.verbose)
+    print('sosbucket: ', args.sosbucket)
 
     # 0.1 determine the verbose flag
-    try: 
-        VerboseFlag=sys.argv[3]
-        if VerboseFlag == '-v': Verbose=True
-    except IndexError:
+    if args.verbose:
+        Verbose=True
+    else:
         Verbose=False
 
     # 0.2 specify index to run. pull from command line arg or set to default = AWS
-    try:
-        index_to_run=int(sys.argv[2]) #integer
-    except IndexError:
-        index_to_run=-235 #open to other options: that is ascii codes for A+W+S
+    index_to_run=args.index
 
     # 0.3 specify i/o directories
     if index_to_run == -235 or "AWS_BATCH_JOB_ID" in os.environ:
         inputdir = Path("/mnt/data/input")    
         outputdir = Path("/mnt/data/output")
+        tmpdir = Path("/tmp")
     else:
         inputdir = Path("/home/mdurand_umass_edu/dev-confluence/mnt/input")
         outputdir = Path("/home/mdurand_umass_edu/dev-confluence/mnt/output")
+        tmpdir = Path("/home/mdurand_umass_edu/dev-confluence/mnt/tmp")
 
     # 1 get reachlist 
     # 1.0 figure out json file. pull from command line arg or set to default
-    try:
-        reachjson = inputdir.joinpath(sys.argv[1])
-    except IndexError:
-        reachjson = inputdir.joinpath("metrosets.json") 
+    reachjson = inputdir.joinpath(args.reachjson)
 
     # 1.2  read in data
-    reachlist = get_reachids(reachjson,index_to_run)
+    sos_bucket = args.sosbucket
+    reachlist = get_reachids(reachjson,index_to_run,tmpdir,sos_bucket)
 
     if Verbose:
         print('reachlist=')
         print(reachlist)
 
     if np.any(reachlist):
-        Qbar,iDelete,nDelete,BadIS,DAll,AllObs = retrieve_obs(reachlist, inputdir,Verbose)
+        if sos_bucket:
+            sosdir = tmpdir
+        else:
+            sosdir = inputdir.joinpath("sos")
+        Qbar,iDelete,nDelete,BadIS,DAll,AllObs = retrieve_obs(reachlist,inputdir,sosdir,Verbose)
     else:
         if Verbose:
             print("No reaches in list for this inversion set. ")

@@ -1,5 +1,5 @@
-# Stage 0 - Create from Python3.9.7 image
-FROM python:3.9.7-slim-buster as stage0
+# Stage 0 - Create from Python3.12 image
+FROM python:3.12-slim as stage0
 
 # Stage 1 - Debian dependencies
 FROM stage0 as stage1
@@ -15,6 +15,7 @@ RUN /app/env/bin/pip install -r /app/requirements.txt
 # Stage 3 - Copy MetroMan code
 FROM stage2 as stage3
 COPY ./metroman /app/metroman/
+COPY ./sos_read /app/sos_read/
 
 # Stage 4 - Execute algorithm
 FROM stage3 as stage4
