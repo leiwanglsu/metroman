@@ -5,7 +5,7 @@ Created on Fri Jun 12 11:52:52 2020
 
 @author: mtd
 """
-from numpy import mean,cov,sqrt,diagonal,empty,NaN,ones,std,diag,log,corrcoef
+from numpy import mean,cov,sqrt,diagonal,empty,nan,ones,std,diag,log,corrcoef
 from metroman.MetroManVariables import Estimates 
 from metroman.calcnhat import calcnhat
 
