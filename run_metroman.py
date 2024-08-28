@@ -92,13 +92,8 @@ def retrieve_obs(reachlist, inputdir, Verbose):
         if swot_file_exists:
             swot_dataset = Dataset(swotfile)
             nt_reach=swot_dataset.dimensions["nt"].size
-            #ts = swot_dataset["reach"]["time"][:].filled(0) #seconds
-            #ts = list(swot_dataset["reach"]["time"][:].filled(0)) #seconds
-            #ts = list(np.round(swot_dataset["reach"]["time"][:].filled(0)/3600.)) #hours
             ts = list(np.round(swot_dataset["reach"]["time"][:].filled(np.nan)/3600.)) #hours
             allts[reach['reach_id']]=ts
-            #print('reach=',reach['reach_id'],'nt=',nt_reach)
-            #print('ts=',ts)
             swot_dataset.close()
         else:
             nt_reach=0
@@ -110,7 +105,6 @@ def retrieve_obs(reachlist, inputdir, Verbose):
     for i,reach in enumerate(reachlist):
         if i==0:
             treach=[t for t in allts[reach['reach_id']]  if not np.isnan(t) ]
-            #overlap_ts=list(treach)
             overlap_ts=treach
             nt_reach=len(allts[reach['reach_id']])
             overlap_fs[reach['reach_id']]=np.full( (nt_reach,),True )
@@ -207,6 +201,7 @@ def retrieve_obs(reachlist, inputdir, Verbose):
         nt_reach_overlap=sum(overlap_fs[reach['reach_id']])
 
         if nt_reach_overlap != DAll.nt:
+            # note this should never happen
             if Verbose:
                 print('number of good observations for reach',reach['reach_id'],'does not match number of obs for set')
                 print(overlap_fs[reach['reach_id']])
@@ -218,6 +213,8 @@ def retrieve_obs(reachlist, inputdir, Verbose):
             iDelete=0
             nDelete=0
             # overlap_ts = []
+            overlap_ts=list(np.delete(np.array(overlap_ts),iDelete,0))
+
             return Qbar,iDelete,nDelete,BadIS,DAll,AllObs,overlap_ts 
 
         h=swot_dataset["reach/wse"][0:nt_reach].filled(np.nan)
@@ -276,6 +273,8 @@ def retrieve_obs(reachlist, inputdir, Verbose):
     AllObs.h=np.delete(AllObs.h,iDelete,1)
     AllObs.w=np.delete(AllObs.w,iDelete,1)
     AllObs.S=np.delete(AllObs.S,iDelete,1)
+
+    overlap_ts=list(np.delete(np.array(overlap_ts),iDelete,0))
 
     DAll.nt -= nDelete
     talli=np.delete(talli,iDelete)
@@ -390,8 +389,8 @@ def write_output(outputdir, reachids, Estimate, iDelete, nDelete, BadIS,overlap_
     nt.units = "time steps"
     nt[:] = range(len(Estimate.AllQ[0]))
 
-    if BadIS:
-        overlap_ts=list(np.full( (len(Estimate.AllQ[0]),),fillvalue) )
+    #if BadIS:
+    #    overlap_ts=list(np.full( (len(Estimate.AllQ[0]),),fillvalue) )
 
     reach_id = dataset.createVariable("reach_id", "i8", ("nr",))
     reach_id[:] = np.array(reachids, dtype=int)
