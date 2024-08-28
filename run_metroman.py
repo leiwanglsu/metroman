@@ -72,7 +72,8 @@ def get_domain_obs(nr):
 
 def retrieve_obs(reachlist, inputdir, Verbose):
     """ Retrieves data from SWOT and SoS files, populates observation object and
-    returns qbar.
+    returns : Qbar,iDelete,nDelete,BadIS,DAll,AllObs,overlap_ts
+
     -1: figure out overlapping times among reaches
      0: set up domain
      1: read observations
@@ -189,7 +190,7 @@ def retrieve_obs(reachlist, inputdir, Verbose):
         BadIS=True
         iDelete=0
         nDelete=0
-        return Qbar,iDelete,nDelete,BadIS,DAll,AllObs
+        return Qbar,iDelete,nDelete,BadIS,DAll,AllObs,overlap_ts
 
   
     # 1.3 loop over files and extract data
@@ -296,7 +297,6 @@ def retrieve_obs(reachlist, inputdir, Verbose):
         iDelete=0
         nDelete=0
         
-        # overlap_ts = []
         return Qbar,iDelete,nDelete,BadIS,DAll,AllObs, overlap_ts	
 	
     DAll.dt=empty(DAll.nt-1)
@@ -390,6 +390,9 @@ def write_output(outputdir, reachids, Estimate, iDelete, nDelete, BadIS,overlap_
     nt.units = "time steps"
     nt[:] = range(len(Estimate.AllQ[0]))
 
+    if BadIS:
+        overlap_ts=list(np.full( (len(Estimate.AllQ[0]),),fillvalue) )
+
     reach_id = dataset.createVariable("reach_id", "i8", ("nr",))
     reach_id[:] = np.array(reachids, dtype=int)
 
@@ -471,6 +474,9 @@ def main():
         print('DAll.nt=',DAll.nt)
 
         DAll.nt += nDelete
+
+        #print('iDelete=',iDelete)
+        #overlap_ts=list(np.delete(np.array(overlap_ts),iDelete,0))
         
         Estimate=Estimates(DAll,DAll)
         Estimate.nahat=np.full([DAll.nR],fillvalue)
