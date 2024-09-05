@@ -79,10 +79,18 @@ def get_domain_obs(nr):
 def retrieve_obs(reachlist, inputdir, sosdir, Verbose):
     """ Retrieves data from SWOT and SoS files, populates observation object and
     returns : Qbar,iDelete,nDelete,BadIS,DAll,AllObs,overlap_ts
+        overlap_ts: the overlapping time indices without any bad data removed
 
     -1: figure out overlapping times among reaches
      0: set up domain
      1: read observations
+        1.1: check that there are enough reaches and times. if not, exit
+        1.3: loop over swot input files and extract data
+            1.3.1: open swot file
+            1.3.2: check for nt consistency. if not exit. this should never happen
+            1.3.3 read height, width and slope
+            1.3.4 read Qbar from SOS
+            1.3.5 read reach length and flow distance
      2: select non-fill observations
 
 """
@@ -196,6 +204,7 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose):
     # 1.3 loop over files and extract data
     i=0
     for reach in reachlist:
+        #1.3.1 open swot file
         swotfile=inputdir.joinpath('swot', reach["swot"])
         swot_file_exists=os.path.exists(swotfile)
         if swot_file_exists:
@@ -206,6 +215,7 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose):
 
         nt_reach_overlap=sum(overlap_fs[reach['reach_id']])
 
+        # 1.3.2 check nt consistency
         if nt_reach_overlap != DAll.nt:
             # note this should never happen
             if Verbose:
@@ -223,6 +233,7 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose):
 
             return Qbar,iDelete,nDelete,BadIS,DAll,AllObs,overlap_ts 
 
+        # 1.3.3 read height, width and slope
         h=swot_dataset["reach/wse"][0:nt_reach].filled(np.nan)
         AllObs.h[i,:]=h[overlap_fs[reach['reach_id']]]
         w=swot_dataset["reach/width"][0:nt_reach].filled(np.nan)
@@ -232,16 +243,7 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose):
 
         swot_dataset.close()
 
-        nbad=np.count_nonzero(np.isnan(AllObs.h[0,:]))
-        if DAll.nt-nbad < 6: #note: 6 is typically minimum needed observations for metroman 
-            BadIS=True
-            iDelete=0
-            nDelete=0
-            # Not enough data - invalid run
-            if Verbose:
-                print('Not enough observations for this inversion set. Stopping.')
-            return Qbar,iDelete,nDelete,BadIS,DAll,AllObs
-
+        # 1.3.4 read Qbar from SOS
         sosfile=sosdir.joinpath(reach["sos"])
         sos_dataset=Dataset(sosfile)
         
@@ -256,6 +258,7 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose):
              BadIS=True
         sos_dataset.close()
 
+        #1.3.5 read reach length and flow distance
         swordfile=inputdir.joinpath('sword',reach["sword"])
         sword_dataset=Dataset(swordfile)
         swordreachids=sword_dataset["reaches/reach_id"][:]
@@ -290,7 +293,9 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose):
     AllObs.w=np.delete(AllObs.w,iDelete,1)
     AllObs.S=np.delete(AllObs.S,iDelete,1)
 
-    overlap_ts=list(np.delete(np.array(overlap_ts),iDelete,0))
+    #overlap_ts_all=overlap_ts
+
+    #overlap_ts=list(np.delete(np.array(overlap_ts),iDelete,0))
 
     DAll.nt -= nDelete
     talli=np.delete(talli,iDelete)
