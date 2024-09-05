@@ -31,13 +31,13 @@ def CalculateEstimates(C,D,Obs,Prior,DAll,AllObs,nOpt):
     
     #2) calculate the Q chain, and estimate mean and std
     nhat=empty([D.nR,D.nt])
-    nhat[:]=NaN
+    nhat[:]=nan
     nhatAll=empty([D.nR,DAll.nt])
-    nhatAll[:]=NaN
+    nhatAll[:]=nan
     C.thetaQ=empty([C.N,D.nR,D.nt])
-    C.thetaQ[:]=NaN
+    C.thetaQ[:]=nan
     C.thetaAllQ=empty([C.N,D.nR,DAll.nt])
-    C.thetaAllQ[:]=NaN
+    C.thetaAllQ[:]=nan
     for i in range(0,C.N):
         for r in range(0,D.nR):
             nhat[r,:]=calcnhat(Obs.w[r,:], Obs.h[r,:], AllObs.hmin[r], \
@@ -65,7 +65,7 @@ def CalculateEstimates(C,D,Obs,Prior,DAll,AllObs,nOpt):
                 *Obs.w**(-2/3)*sqrt(Obs.S);
     
     nhat=empty([D.nR,DAll.nt])
-    nhat[:]=NaN
+    nhat[:]=nan
     for r in range(0,D.nR):
         nhat[r,:]=calcnhat(AllObs.w[r,:],AllObs.h[r,:],AllObs.hmin[r], \
                            Prior.meanA0[r]-AllObs.A0Shift[r]+AllObs.dA[r,:], \
@@ -83,11 +83,11 @@ def CalculateEstimates(C,D,Obs,Prior,DAll,AllObs,nOpt):
     
     #4.2) estimate correlation coefficient between A0 & na, A0 & x1, na & x1
     E.rho_A0na=empty([D.nR,1])
-    E.rho_A0na[:]=NaN
+    E.rho_A0na[:]=nan
     E.rho_A0x1=empty([D.nR,1])
-    E.rho_A0x1[:]=NaN
+    E.rho_A0x1[:]=nan
     E.rho_nax1=empty([D.nR,1])
-    E.rho_nax1[:]=NaN
+    E.rho_nax1[:]=nan
     for i in range(0,D.nR):
         R_A0na=corrcoef(C.thetaA0[i,:], C.thetana[i,:])
         E.rho_A0na[i,0]=R_A0na[0,1]
@@ -180,7 +180,7 @@ def CalculateEstimates(C,D,Obs,Prior,DAll,AllObs,nOpt):
 
     #4.4.3) discharge error budget
     E.QerrVarSum=empty([D.nR,6])
-    E.QerrVarSum[:]=NaN
+    E.QerrVarSum[:]=nan
     E.QerrVarSum[:,0]=E.QhatUnc_na;
     E.QerrVarSum[:,1]=mean(E.QhatUnc_x1,1);
     E.QerrVarSum[:,2]=mean(E.QhatUnc_A0,1);
