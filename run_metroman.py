@@ -444,6 +444,7 @@ def create_args():
     arg_parser.add_argument('-i',
                             '--index',
                             type=int,
+                            default = -235,
                             help='Index to specify input data to execute on')
     arg_parser.add_argument('-r',
                             '--reachjson',
@@ -478,7 +479,11 @@ def main():
         Verbose=False
 
     # 0.2 specify index to run. pull from command line arg or set to default = AWS
-    index_to_run=args.index
+    if args.index == -235:
+        index_to_run = int(os.environ.get("AWS_BATCH_JOB_ARRAY_INDEX"))
+    
+    else:
+        index_to_run=args.index
 
     # 0.3 specify i/o directories
     if index_to_run == -235 or "AWS_BATCH_JOB_ID" in os.environ:
