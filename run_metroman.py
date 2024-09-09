@@ -3,6 +3,7 @@ contains A0, n, and Q time series.
 """
 
 # Standard imports
+import argparse
 import json
 import os
 from pathlib import Path
@@ -22,8 +23,9 @@ from metroman.MetroManVariables import Domain,Observations,Chain,RandomSeeds,Exp
 from metroman.MetropolisCalculations import MetropolisCalculations
 from metroman.ProcessPrior import ProcessPrior
 from metroman.SelObs import SelObs
+from sos_read.sos_read import download_sos
 
-def get_reachids(reachjson,index_to_run):
+def get_reachids(reachjson,index_to_run,tmp_dir,sos_bucket):
     """Extract and return a list of reach identifiers from json file.
     
     Parameters
@@ -49,6 +51,10 @@ def get_reachids(reachjson,index_to_run):
     with open(reachjson) as jsonfile:
         data = json.load(jsonfile)
 
+    if sos_bucket:
+        sos_file = tmp_dir.joinpath(data[index][0]["sos"])    # just grab first in set
+        download_sos(sos_bucket, sos_file)
+    
     return data[index]
 
 def get_domain_obs(nr):
@@ -70,37 +76,99 @@ def get_domain_obs(nr):
 
     return DAll, AllObs
 
-def retrieve_obs(reachlist, inputdir, Verbose):
+def retrieve_obs(reachlist, inputdir, sosdir, Verbose):
     """ Retrieves data from SWOT and SoS files, populates observation object and
-    returns qbar."""
+    returns : Qbar,iDelete,nDelete,BadIS,DAll,AllObs,overlap_ts
+        overlap_ts: the overlapping time indices without any bad data removed
+
+    -1: figure out overlapping times among reaches
+     0: set up domain
+     1: read observations
+        1.1: check that there are enough reaches and times. if not, exit
+        1.3: loop over swot input files and extract data
+            1.3.1: open swot file
+            1.3.2: check for nt consistency. if not exit. this should never happen
+            1.3.3 read height, width and slope
+            1.3.4 read Qbar from SOS
+            1.3.5 read reach length and flow distance
+     2: select non-fill observations
+
+"""
+ 
+    # -1. figure out times by looking across all reaches and when they are measured
+    #       this solution is klugey. replace once pass ids available in swot ts files
+
+    # extract measured times
+    allts=dict()
+    for reach in reachlist:
+        swotfile=inputdir.joinpath('swot', reach["swot"])
+        swot_file_exists=os.path.exists(swotfile)
+        if swot_file_exists:
+            swot_dataset = Dataset(swotfile)
+            nt_reach=swot_dataset.dimensions["nt"].size
+            ts = list(np.round(swot_dataset["reach"]["time"][:].filled(np.nan)/3600.)) #hours
+            allts[reach['reach_id']]=ts
+            swot_dataset.close()
+        else:
+            nt_reach=0
+
+    # determine overlapping measured times and a filter for each reach indicating which times
+    #    for that reach are in the overlap
+    overlap_fs=dict()
+    overlap_ts = []
+    for i,reach in enumerate(reachlist):
+        if i==0:
+            treach=[t for t in allts[reach['reach_id']]  if not np.isnan(t) ]
+            overlap_ts=treach
+            nt_reach=len(allts[reach['reach_id']])
+            overlap_fs[reach['reach_id']]=np.full( (nt_reach,),True )
+        else:
+            treach=[t for t in allts[reach['reach_id']]  if not np.isnan(t) ]
+            overlap_ts=list( set(overlap_ts).intersection(set(treach)))
+            nt_reach=len(list(allts[reach['reach_id']]))
+            overlap_fs[reach['reach_id']]=np.full( (nt_reach,),False)
+            for ii,t in enumerate(list(allts[reach['reach_id']])):
+                if t in overlap_ts:
+                    #print('reach=',reach['reach_id'],'t=',t,'found in overlap')
+                    overlap_fs[reach['reach_id']][ii]=True
+        if Verbose:
+            print('for reach',reach['reach_id'],'nt=',nt_reach)
+            
+
+    #loop over all reaches and fix overlap_fs if needed
+    for i,reach in enumerate(reachlist):
+        tarray=np.array(allts[reach['reach_id']])
+        #for ii,t in enumerate(list(allts[reach['reach_id']])):
+        for ii,t in enumerate(list(tarray)):
+            if t in overlap_ts:
+                overlap_fs[reach['reach_id']][ii]=True
+            else:
+                overlap_fs[reach['reach_id']][ii]=False
+            # check if this is a duplicated value
+            if t in list(tarray[:ii]):
+                overlap_fs[reach['reach_id']][ii]=False
+
+    overlap_ts.sort()
+    nt=len(overlap_ts)
 
     # 0. set up domain - this could be moved to a separate function
     nr=len(reachlist)   
 
     DAll=Domain()
     DAll.nR=nr #number of reaches
-    reach0=reachlist[0]
-    swotfile0=inputdir.joinpath('swot', reach0["swot"])
-    swot_file_exists=os.path.exists(swotfile0)
-
-    if swot_file_exists:  
-        swot_dataset0 = Dataset(swotfile0)
-        nt=swot_dataset0.dimensions["nt"].size
-        DAll.nt=nt
-        ts = swot_dataset0["reach"]["time"][:].filled(0)
-        swot_dataset0.close()
-    else:
-        ts=[0]
-        nt=0
-        DAll.nt=0
+    DAll.nt=nt
 
     if Verbose:
         print('Number of reaches:',nr)
-        print('Total number of times:',nt)
+        print('Total number of times (after intersecting among reach timeseries):',nt)
+        print('overlapping times are: ',overlap_ts)
 
     # tall = [ datetime.datetime.strptime(str(t), "%Y%m%d") for t in ts ]
     epoch = datetime.datetime(2000,1,1,0,0,0)
-    tall = [ epoch + datetime.timedelta(seconds=int(t)) for t in ts ]
+    #tall = [ epoch + datetime.timedelta(seconds=int(t)) for t in ts ]
+    tall = [ epoch + datetime.timedelta(hours=int(t)) for t in overlap_ts ]
+
+    #print(tall)
 
     talli=empty(DAll.nt)
     for i in range(DAll.nt):
@@ -115,13 +183,13 @@ def retrieve_obs(reachlist, inputdir, Verbose):
     else:
         AllObs=0.
 
-    # 1. reading of observations
+    # 1. read observations
     Qbar=empty(DAll.nR)
     reach_length=empty(DAll.nR)
     dist_out=empty(DAll.nR)
-    i=0
     BadIS=False
 
+    # 1.1 check that there are enough reaches and times
     if DAll.nR < 2 or DAll.nt==0:
         if Verbose:
             print('Data issue')
@@ -130,10 +198,13 @@ def retrieve_obs(reachlist, inputdir, Verbose):
         BadIS=True
         iDelete=0
         nDelete=0
-        return Qbar,iDelete,nDelete,BadIS,DAll,AllObs
-        
+        return Qbar,iDelete,nDelete,BadIS,DAll,AllObs,overlap_ts
 
+  
+    # 1.3 loop over files and extract data
+    i=0
     for reach in reachlist:
+        #1.3.1 open swot file
         swotfile=inputdir.joinpath('swot', reach["swot"])
         swot_file_exists=os.path.exists(swotfile)
         if swot_file_exists:
@@ -142,30 +213,38 @@ def retrieve_obs(reachlist, inputdir, Verbose):
         else:
             nt_reach=0
 
-        if nt_reach != DAll.nt:
+        nt_reach_overlap=sum(overlap_fs[reach['reach_id']])
+
+        # 1.3.2 check nt consistency
+        if nt_reach_overlap != DAll.nt:
+            # note this should never happen
             if Verbose:
-                print('nt in ',swotfile,' is different than for',swotfile0,'. Stopping.')
+                print('number of good observations for reach',reach['reach_id'],'does not match number of obs for set')
+                print(overlap_fs[reach['reach_id']])
+                print('tall=',tall)
+                print('allts[reach]=',allts[reach['reach_id']])
+                print('allts[reach]=',list(set(allts[reach['reach_id']])))
+                print(' ... nt_reach_overlap=',nt_reach_overlap,'DAll.nt=',DAll.nt,'nt_reach=',nt_reach)
             BadIS=True
             iDelete=0
             nDelete=0
-            return Qbar,iDelete,nDelete,BadIS,DAll,AllObs
+            # overlap_ts = []
+            overlap_ts=list(np.delete(np.array(overlap_ts),iDelete,0))
 
-        AllObs.h[i,:]=swot_dataset["reach/wse"][0:DAll.nt].filled(np.nan)
-        AllObs.w[i,:]=swot_dataset["reach/width"][0:DAll.nt].filled(np.nan)
-        AllObs.S[i,:]=swot_dataset["reach/slope2"][0:nt].filled(np.nan)
+            return Qbar,iDelete,nDelete,BadIS,DAll,AllObs,overlap_ts 
+
+        # 1.3.3 read height, width and slope
+        h=swot_dataset["reach/wse"][0:nt_reach].filled(np.nan)
+        AllObs.h[i,:]=h[overlap_fs[reach['reach_id']]]
+        w=swot_dataset["reach/width"][0:nt_reach].filled(np.nan)
+        AllObs.w[i,:]=w[overlap_fs[reach['reach_id']]]
+        S=swot_dataset["reach/slope2"][0:nt_reach].filled(np.nan)
+        AllObs.S[i,:]=S[overlap_fs[reach['reach_id']]]
+
         swot_dataset.close()
 
-        nbad=np.count_nonzero(np.isnan(AllObs.h[0,:]))
-        if DAll.nt-nbad < 6: #note: 6 is typically minimum needed observations for metroman 
-            BadIS=True
-            iDelete=0
-            nDelete=0
-            # Not enough data - invalid run
-            if Verbose:
-                print('Not enough observations for this inversion set. Stopping.')
-            return Qbar,iDelete,nDelete,BadIS,DAll,AllObs
-
-        sosfile=inputdir.joinpath('sos', reach["sos"])
+        # 1.3.4 read Qbar from SOS
+        sosfile=sosdir.joinpath(reach["sos"])
         sos_dataset=Dataset(sosfile)
         
         sosreachids=sos_dataset["reaches/reach_id"][:]
@@ -177,9 +256,9 @@ def retrieve_obs(reachlist, inputdir, Verbose):
              if Verbose:
                  print('Read in an invalid prior value. Stopping.')
              BadIS=True
-
         sos_dataset.close()
 
+        #1.3.5 read reach length and flow distance
         swordfile=inputdir.joinpath('sword',reach["sword"])
         sword_dataset=Dataset(swordfile)
         swordreachids=sword_dataset["reaches/reach_id"][:]
@@ -190,7 +269,6 @@ def retrieve_obs(reachlist, inputdir, Verbose):
 
         dist_outs=sword_dataset["reaches/dist_out"][:]
         dist_out[i]=dist_outs[k]
-
         sword_dataset.close()
 
         i += 1
@@ -199,7 +277,14 @@ def retrieve_obs(reachlist, inputdir, Verbose):
     DAll.xkm=np.max(dist_out)-dist_out + DAll.L[0]/2 #reach midpoint distance downstream [m]
 
     # 2. select observations that are NOT equal to the fill value
-    #iDelete=np.where( np.any(np.isnan(AllObs.h),0) | np.any(np.isnan(AllObs.w),0) )
+
+    if Verbose:
+        print('before filtering bad data')
+        print('nt=',DAll.nt)
+        print('h=',AllObs.h)
+        print('w=',AllObs.w)
+        print('S=',AllObs.S)
+
     iDelete=np.where( np.any(np.isnan(AllObs.h),0) | np.any(np.isnan(AllObs.w),0) | np.any(np.isnan(AllObs.S),0) )
 
     shape_iDelete=np.shape(iDelete)
@@ -208,16 +293,31 @@ def retrieve_obs(reachlist, inputdir, Verbose):
     AllObs.w=np.delete(AllObs.w,iDelete,1)
     AllObs.S=np.delete(AllObs.S,iDelete,1)
 
+    #overlap_ts_all=overlap_ts
+
+    #overlap_ts=list(np.delete(np.array(overlap_ts),iDelete,0))
+
     DAll.nt -= nDelete
     talli=np.delete(talli,iDelete)
 
-    if DAll.nt==0:
+    if Verbose:
+        print('after filtering bad data')
+        print('nt=',DAll.nt)
+        print('h=',AllObs.h)
+        print('w=',AllObs.w)
+        print('S=',AllObs.S)
+
+    ntmin=4
+
+    if DAll.nt<ntmin:
         if Verbose:
-            print('After removing bad data, there are zero remaining observations')
+            print('After removing bad data, there are fewer than', ntmin ,'remaining observations. Quitting.')
+        
         BadIS=True
         iDelete=0
-        #nDelete=0
-        return Qbar,iDelete,nDelete,BadIS,DAll,AllObs	
+        nDelete=0
+        
+        return Qbar,iDelete,nDelete,BadIS,DAll,AllObs, overlap_ts	
 	
     DAll.dt=empty(DAll.nt-1)
     for i in range(DAll.nt-1):
@@ -229,7 +329,7 @@ def retrieve_obs(reachlist, inputdir, Verbose):
     AllObs.hv=reshape(AllObs.h, (DAll.nR*DAll.nt,1))
     AllObs.Sv=reshape(AllObs.S, (DAll.nR*DAll.nt,1))
     AllObs.wv=reshape(AllObs.w, (DAll.nR*DAll.nt,1))
-    return Qbar,iDelete,nDelete,BadIS,DAll,AllObs
+    return Qbar,iDelete,nDelete,BadIS,DAll,AllObs,overlap_ts
 
 def set_up_experiment(DAll, Qbar):
     """Define and set parameters for experiment and return a tuple of 
@@ -281,7 +381,7 @@ def process(DAll, AllObs, Exp, P, R, C, Verbose):
     Estimate,C=CalculateEstimates(C,D,Obs,P,DAll,AllObs,Exp.nOpt) 
     return Estimate
 
-def write_output(outputdir, reachids, Estimate, iDelete, nDelete, BadIS):
+def write_output(outputdir, reachids, Estimate, iDelete, nDelete, BadIS,overlap_ts):
     """Write data from MetroMan run to NetCDF file in output directory."""
 
     fillvalue = -999999999999
@@ -297,7 +397,7 @@ def write_output(outputdir, reachids, Estimate, iDelete, nDelete, BadIS):
     outfile = outputdir.joinpath(setid)
 
     dataset = Dataset(outfile, 'w', format="NETCDF4")
-    dataset.set_id = setid    # TODO decide on how to identify sets
+    dataset.set_id = setid    
     dataset.valid =  1 if not BadIS else 0   # TODO decide what's valid if applicable
     dataset.createDimension("nr", len(reachids))
     dataset.createDimension("nt", len(Estimate.AllQ[0]))
@@ -309,6 +409,9 @@ def write_output(outputdir, reachids, Estimate, iDelete, nDelete, BadIS):
     nt = dataset.createVariable("nt", "i4", ("nt",))
     nt.units = "time steps"
     nt[:] = range(len(Estimate.AllQ[0]))
+
+    #if BadIS:
+    #    overlap_ts=list(np.full( (len(Estimate.AllQ[0]),),fillvalue) )
 
     reach_id = dataset.createVariable("reach_id", "i8", ("nr",))
     reach_id[:] = np.array(reachids, dtype=int)
@@ -328,49 +431,88 @@ def write_output(outputdir, reachids, Estimate, iDelete, nDelete, BadIS):
     qu = dataset.createVariable("q_u", "f8", ("nr", "nt"), fill_value=fillvalue)
     qu[:] = Estimate.QhatUnc_HatAllAll
 
+    t = dataset.createVariable("t","f8",("nt"),fill_value=fillvalue)
+    t.long_name= 'swot timeseries "time" variable converted to hours and rounded to integer'
+    t[:] = overlap_ts
+
     dataset.close()
+
+def create_args():
+    """Create and return argparsers with command line arguments."""
+    
+    arg_parser = argparse.ArgumentParser(description='Integrate FLPE')
+    arg_parser.add_argument('-i',
+                            '--index',
+                            type=int,
+                            default = -235,
+                            help='Index to specify input data to execute on')
+    arg_parser.add_argument('-r',
+                            '--reachjson',
+                            type=str,
+                            help='Name of the reach.json',
+                            default='metrosets.json')
+    arg_parser.add_argument('-v',
+                            '--verbose',
+                            help='Indicates verbose logging',
+                            action='store_true')
+    arg_parser.add_argument('-s',
+                            '--sosbucket',
+                            type=str,
+                            help='Name of the SoS bucket and key to download from',
+                            default='')
+    return arg_parser
 
 def main():
 
     # 0 control steps
+    arg_parser = create_args()
+    args = arg_parser.parse_args()
+    print('index: ', args.index)
+    print('reach file: ', args.reachjson)
+    print('verbose flag: ', args.verbose)
+    print('sosbucket: ', args.sosbucket)
 
     # 0.1 determine the verbose flag
-    try: 
-        VerboseFlag=sys.argv[3]
-        if VerboseFlag == '-v': Verbose=True
-    except IndexError:
+    if args.verbose:
+        Verbose=True
+    else:
         Verbose=False
 
     # 0.2 specify index to run. pull from command line arg or set to default = AWS
-    try:
-        index_to_run=int(sys.argv[2]) #integer
-    except IndexError:
-        index_to_run=-235 #open to other options: that is ascii codes for A+W+S
+    if args.index == -235:
+        index_to_run = int(os.environ.get("AWS_BATCH_JOB_ARRAY_INDEX"))
+    
+    else:
+        index_to_run=args.index
 
     # 0.3 specify i/o directories
     if index_to_run == -235 or "AWS_BATCH_JOB_ID" in os.environ:
         inputdir = Path("/mnt/data/input")    
         outputdir = Path("/mnt/data/output")
+        tmpdir = Path("/tmp")
     else:
         inputdir = Path("/home/mdurand_umass_edu/dev-confluence/mnt/input")
         outputdir = Path("/home/mdurand_umass_edu/dev-confluence/mnt/output")
+        tmpdir = Path("/home/mdurand_umass_edu/dev-confluence/mnt/tmp")
 
     # 1 get reachlist 
     # 1.0 figure out json file. pull from command line arg or set to default
-    try:
-        reachjson = inputdir.joinpath(sys.argv[1])
-    except IndexError:
-        reachjson = inputdir.joinpath("metrosets.json") 
+    reachjson = inputdir.joinpath(args.reachjson)
 
     # 1.2  read in data
-    reachlist = get_reachids(reachjson,index_to_run)
+    sos_bucket = args.sosbucket
+    reachlist = get_reachids(reachjson,index_to_run,tmpdir,sos_bucket)
 
     if Verbose:
         print('reachlist=')
         print(reachlist)
 
     if np.any(reachlist):
-        Qbar,iDelete,nDelete,BadIS,DAll,AllObs = retrieve_obs(reachlist, inputdir,Verbose)
+        if sos_bucket:
+            sosdir = tmpdir
+        else:
+            sosdir = inputdir.joinpath("sos")
+        Qbar,iDelete,nDelete,BadIS,DAll,AllObs,overlap_ts = retrieve_obs(reachlist,inputdir,sosdir,Verbose)
     else:
         if Verbose:
             print("No reaches in list for this inversion set. ")
@@ -385,6 +527,9 @@ def main():
         print('DAll.nt=',DAll.nt)
 
         DAll.nt += nDelete
+
+        #print('iDelete=',iDelete)
+        #overlap_ts=list(np.delete(np.array(overlap_ts),iDelete,0))
         
         Estimate=Estimates(DAll,DAll)
         Estimate.nahat=np.full([DAll.nR],fillvalue)
@@ -406,7 +551,7 @@ def main():
         print("SUCCESS. MetroMan ran for this set. ")
     
     reachids = [ str(e["reach_id"]) for e in reachlist ]
-    write_output(outputdir, reachids, Estimate,iDelete,nDelete,BadIS)
+    write_output(outputdir, reachids, Estimate,iDelete,nDelete,BadIS,overlap_ts)
 
 if __name__ == "__main__":
    main()    
