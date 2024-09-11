@@ -488,7 +488,7 @@ def main():
     # 0.3 specify i/o directories
     if index_to_run == -235 or "AWS_BATCH_JOB_ID" in os.environ:
         inputdir = Path("/mnt/data/input")    
-        outputdir = Path("/mnt/data/output")
+        outputdir = Path("/mnt/data/output/sets")
         tmpdir = Path("/tmp")
     else:
         inputdir = Path("/home/mdurand_umass_edu/dev-confluence/mnt/input")
