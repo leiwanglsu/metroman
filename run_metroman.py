@@ -292,7 +292,6 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose):
     AllObs.h=np.delete(AllObs.h,iDelete,1)
     AllObs.w=np.delete(AllObs.w,iDelete,1)
     AllObs.S=np.delete(AllObs.S,iDelete,1)
-    overlap_ts = np.delete(overlap_ts, iDelete)
 
     #overlap_ts_all=overlap_ts
 
@@ -538,6 +537,7 @@ def main():
         Estimate.A0hat=np.full([DAll.nR],fillvalue)
         Estimate.QhatUnc_HatAllAll=np.full([DAll.nR,DAll.nt],fillvalue)
         Estimate.AllQ=np.full([DAll.nR,DAll.nt],fillvalue)
+        overlap_ts=np.full([DAll.nt],fillvalue)
 
         DAll.nt -= nDelete
         nDelete=0
