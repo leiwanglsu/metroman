@@ -292,6 +292,7 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose):
     AllObs.h=np.delete(AllObs.h,iDelete,1)
     AllObs.w=np.delete(AllObs.w,iDelete,1)
     AllObs.S=np.delete(AllObs.S,iDelete,1)
+    overlap_ts = np.delete(overlap_ts, iDelete)
 
     #overlap_ts_all=overlap_ts
 
