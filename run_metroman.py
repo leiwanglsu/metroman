@@ -53,7 +53,8 @@ def get_reachids(reachjson,index_to_run,tmp_dir,sos_bucket):
 
     if sos_bucket:
         sos_file = tmp_dir.joinpath(data[index][0]["sos"])    # just grab first in set
-        download_sos(sos_bucket, sos_file)
+        if sos_bucket != 'local':
+            download_sos(sos_bucket, sos_file)
     
     return data[index]
 
@@ -458,7 +459,7 @@ def create_args():
     arg_parser.add_argument('-s',
                             '--sosbucket',
                             type=str,
-                            help='Name of the SoS bucket and key to download from',
+                            help='Name of the SoS bucket and key to download from, set to "local" to not download an sos',
                             default='')
     return arg_parser
 
