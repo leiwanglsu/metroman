@@ -490,7 +490,10 @@ def main():
     if index_to_run == -235 or "AWS_BATCH_JOB_ID" in os.environ:
         inputdir = Path("/mnt/data/input")    
         outputdir = Path("/mnt/data/output/sets")
-        tmpdir = Path("/tmp")
+        if args.sosbucket != 'local':
+            tmpdir = Path("/tmp")
+        else:
+            tmpdir = Path(os.path.join(inputdir, 'sos'))
     else:
         inputdir = Path("/home/mdurand_umass_edu/dev-confluence/mnt/input")
         outputdir = Path("/home/mdurand_umass_edu/dev-confluence/mnt/output")
