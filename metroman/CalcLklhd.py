@@ -31,7 +31,7 @@ def CalcLklhd(Obs,AllObs,A0,na,x1,D,Prior,Delta,DeltaA,B,qhatv,nOpt):
 
     if (Obs.hv<0).any() | (A0v<0).any() | (Obs.Sv<0).any():
         f=0
-        return
+        return f # bug here Lei Wang 12/03/2024
     
     #%%1) Calculate dQdx, dQdt, and q for channel mass balance
     dQdxv=Delta @ Qv
